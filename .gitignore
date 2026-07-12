@@ -1,0 +1,14 @@
+node_modules
+dist
+*.tsbuildinfo
+.cache
+.DS_Store
+.pnpm-store
+.env
+# draw 渲染产物（测试预览）
+packages/draw/output/
+# VitePress / TypeDoc 生成物
+docs/api/**
+docs/.vitepress/dist
+docs/.vitepress/cache
+docs/.vitepress/.temp

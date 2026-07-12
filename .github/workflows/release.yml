@@ -1,0 +1,78 @@
+# npm 发布：Changesets + OIDC Trusted Publishing（无 NPM_TOKEN）
+#
+# 流程：
+# 1. push/main 且存在未消费的 .changeset → 开/更新 Version PR
+# 2. 合并 Version PR 后再次跑本 workflow → changeset publish（OIDC）
+#
+# npm 上每个 @mai-kit/* 包需配置 Trusted Publisher：
+#   Organization/user + Repository + Workflow filename: release.yml
+#   （只填文件名，不要 .github/workflows/ 前缀）
+#
+# 要求：npm CLI ≥ 11.5.1、GitHub-hosted runner、package.json 的 repository 与仓库一致
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write # OIDC → npm Trusted Publishing
+
+jobs:
+  release:
+    name: version or publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # changesets 需要完整历史以生成 changelog
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      # Trusted Publishing 需要足够新的 npm
+      - name: Ensure npm ≥ 11.5.1
+        run: npm install -g npm@latest
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # 发版前再跑门禁，避免脏版本进 registry
+      - name: Format & lint
+        run: pnpm check
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Typecheck
+        run: pnpm --filter "./packages/*" -r run typecheck
+
+      - name: Unit tests
+        run: pnpm --filter "./packages/*" -r --if-present run test:unit
+
+      - name: Create Release PR or publish
+        uses: changesets/action@v1
+        with:
+          version: pnpm run ci:version
+          publish: pnpm run ci:publish
+          title: "chore(release): version packages"
+          commit: "chore(release): version packages"
+          createGithubReleases: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 故意不设置 NPM_TOKEN / NODE_AUTH_TOKEN：走 OIDC

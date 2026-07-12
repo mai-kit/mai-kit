@@ -1,0 +1,58 @@
+{
+  "name": "@mai-kit/draw",
+  "version": "0.1.0",
+  "description": "舞萌 DX 成绩海报渲染。",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "browser": {
+    "@resvg/resvg-js": false
+  },
+  "files": [
+    "dist",
+    "data",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "dev": "tsdown --watch",
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "test": "pnpm --filter @mai-kit/draw... run build && pnpm run test:unit",
+    "test:unit": "node --test tests/*.test.ts",
+    "test:integration:lxns": "pnpm --filter @mai-kit/draw... run build && node --env-file-if-exists=../../.env --test tests/integration/lxns.test.ts"
+  },
+  "dependencies": {
+    "@mai-kit/assets": "workspace:*",
+    "@mai-kit/prober": "workspace:*",
+    "@mai-kit/shared": "workspace:*",
+    "@mai-kit/utils": "workspace:*",
+    "@resvg/resvg-js": "^2.6.2",
+    "@resvg/resvg-wasm": "^2.6.2",
+    "react": "^19.1.0",
+    "satori": "^0.12.2"
+  },
+  "devDependencies": {
+    "@mai-kit/database": "workspace:*",
+    "@types/node": "^24.5.1",
+    "@types/react": "^19.1.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wsyzxjn/mai-kit.git",
+    "directory": "packages/draw"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

@@ -1,0 +1,91 @@
+# 快速开始
+
+下面用 LXNS 获取玩家成绩和游戏数据，再生成一张成绩海报。各包也可以独立使用，例如只安装
+`@mai-kit/utils` 计算 Rating。
+
+## 安装
+
+```bash
+pnpm add @mai-kit/prober @mai-kit/database @mai-kit/draw
+```
+
+只做达成率、Rating 或 DX 分计算时，安装：
+
+```bash
+pnpm add @mai-kit/utils
+```
+
+需要重算 Best50、排列升分候选或比较成绩快照时，安装：
+
+```bash
+pnpm add @mai-kit/analysis
+```
+
+npm / yarn / bun 同理。
+
+## 查成绩并生成海报
+
+查分服务和游戏数据源都通过适配器接入。示例使用 LXNS，换用其他适配时，draw 的调用方式不变。
+
+请先申请 [落雪查分器（LXNS）](https://maimai.lxns.net/) 访问令牌，并通过环境变量传入；不要把令牌写进代码仓库。
+
+```ts
+import { createLxnsClient } from "@mai-kit/prober";
+import { LxnsMaimaiDatabase } from "@mai-kit/database";
+import { Draw } from "@mai-kit/draw";
+import { writeFileSync } from "node:fs";
+
+// 查询自己的档案与 Best50
+const me = createLxnsClient({
+  personalAccessToken: process.env.LXNS_API_PERSONAL_ACCESS_TOKEN!,
+}).me();
+
+const [profile, bests] = await Promise.all([me.getProfile(), me.getBests()]);
+
+// 使用 LXNS 公开数据补充曲目、素材和谱面标签
+const playerDraw = await new Draw({
+  database: new LxnsMaimaiDatabase(),
+}).withPlayer(profile, bests);
+
+// render() 返回 PNG 字节
+const poster = await playerDraw.render("poster");
+writeFileSync("poster.png", poster);
+```
+
+其他适配返回同样的 `profile` / `bests` 结构；数据源满足 draw 所需的素材与标签接口后，
+可以直接替换示例中的 LXNS 实现。
+
+### 可选版式
+
+| 版式     | 说明                       |
+| -------- | -------------------------- |
+| `poster` | 完整成绩海报（版式默认值） |
+| `best15` | 新曲 Best15 单图           |
+| `best35` | 旧曲 Best35 单图           |
+| `best50` | B50 全曲单图               |
+
+需要矢量图时：
+
+```ts
+const svg = await playerDraw.renderSvg("poster");
+```
+
+清晰度默认 2 倍（海报约 3840×2160）。可用 `render("poster", { scale: 1 })` 调整。
+
+### 用 LXNS 开发者令牌查别人
+
+```ts
+const client = createLxnsClient({
+  devAccessToken: process.env.LXNS_API_DEV_ACCESS_TOKEN!,
+});
+const player = await client.getPlayer(friendCode);
+const [profile, bests] = await Promise.all([player.getProfile(), player.getBests()]);
+```
+
+取得 `profile` 和 `bests` 后，沿用上面的 `Draw.withPlayer()` 渲染代码。
+
+## 相关文档
+
+- 各包的职责和组合方式：[包与职责](./architecture)
+- 类与函数细节：[API 参考](/api/)
+- 第三方来源与致谢：[关于](./about)

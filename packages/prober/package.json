@@ -1,0 +1,45 @@
+{
+  "name": "@mai-kit/prober",
+  "version": "0.1.0",
+  "description": "舞萌 DX 玩家数据查询适配层，提供按令牌类型收窄的客户端接口。",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "dev": "tsdown --watch",
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "test": "pnpm --filter @mai-kit/prober... run build && pnpm run test:unit",
+    "test:unit": "node --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "@mai-kit/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.1"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wsyzxjn/mai-kit.git",
+    "directory": "packages/prober"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

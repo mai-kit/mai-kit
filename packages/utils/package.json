@@ -1,0 +1,57 @@
+{
+  "name": "@mai-kit/utils",
+  "version": "0.1.0",
+  "description": "Rating、达成率、判定、DX 分和谱面处理等纯函数。",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./judgement": {
+      "types": "./dist/judgement.d.ts",
+      "import": "./dist/judgement.js"
+    },
+    "./song": {
+      "types": "./dist/song.d.ts",
+      "import": "./dist/song.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@mai-kit/shared": "workspace:*"
+  },
+  "scripts": {
+    "dev": "tsdown --watch",
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "test": "pnpm --filter @mai-kit/utils... run build && pnpm run test:unit",
+    "test:unit": "node --test tests/*.test.ts"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wsyzxjn/mai-kit.git",
+    "directory": "packages/utils"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "typedocOptions": {
+    "entryPoints": [
+      "src/index.ts",
+      "src/judgement.ts",
+      "src/song.ts"
+    ]
+  }
+}

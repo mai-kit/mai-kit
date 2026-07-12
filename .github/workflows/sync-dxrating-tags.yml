@@ -1,0 +1,40 @@
+name: Sync DXRating chart tags
+
+on:
+  schedule:
+    - cron: "23 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        # version 取自 package.json 的 packageManager
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @mai-kit/database sync:dxrating-tags
+      - run: pnpm --filter @mai-kit/database test
+      - run: pnpm check
+
+      - name: Commit updated snapshot
+        run: |
+          if [[ -z "$(git status --porcelain -- packages/database/data/dxrating-tags.json)" ]]; then
+            echo "DXRating chart tags are already up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/database/data/dxrating-tags.json
+          git commit -m "chore(database): 同步 DXRating 谱面标签"
+          git push

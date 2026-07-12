@@ -1,0 +1,289 @@
+{
+  "player": {
+    "name": "Amatsuka",
+    "rating": 15823,
+    "course_rank": 16,
+    "upload_time": "2026-06-08T18:30:00"
+  },
+  "summary": {
+    "b50": 15823,
+    "newSongs": 4821,
+    "oldSongs": 11002,
+    "averageAchievement": "100.578%",
+    "averageRating": 316.5,
+    "maxDxScore": 3045,
+    "apPlus": 38,
+    "syncDxPlus": 26,
+    "totalCharts": 2731
+  },
+  "charts": [
+    {
+      "id": 1,
+      "song_name": "系ぎて",
+      "achievements": 100.8621,
+      "dx_score": 326,
+      "level": "14.9",
+      "rate": "sssp",
+      "fc": "app",
+      "dx_star": 5,
+      "dx_max": 336
+    },
+    {
+      "id": 2,
+      "song_name": "Chronomia",
+      "achievements": 100.5788,
+      "dx_score": 324,
+      "level": "14.2",
+      "rate": "sssp",
+      "fc": "fc",
+      "dx_star": 5,
+      "dx_max": 334
+    },
+    {
+      "id": 3,
+      "song_name": "火焰地獄",
+      "achievements": 100.6812,
+      "dx_score": 321,
+      "level": "14.2",
+      "rate": "sssp",
+      "fc": "fc",
+      "dx_star": 4,
+      "dx_max": 338
+    },
+    {
+      "id": 4,
+      "song_name": "48僧伽のマルチバース",
+      "achievements": 100.5243,
+      "dx_score": 319,
+      "level": "14.0",
+      "rate": "sssp",
+      "fs": "sync",
+      "dx_star": 4,
+      "dx_max": 336
+    },
+    {
+      "id": 5,
+      "song_name": "INFINITE ENERZY -Overdoze-",
+      "achievements": 100.7377,
+      "dx_score": 315,
+      "level": "14.0",
+      "rate": "sssp",
+      "fs": "sync",
+      "dx_star": 3,
+      "dx_max": 339
+    },
+    {
+      "id": 6,
+      "song_name": "侮る極ステロイド",
+      "achievements": 100.8456,
+      "dx_score": 312,
+      "level": "13.9",
+      "rate": "sssp",
+      "fc": "fc",
+      "dx_star": 3,
+      "dx_max": 335
+    },
+    {
+      "id": 7,
+      "song_name": "tiny tales continue",
+      "achievements": 100.6825,
+      "dx_score": 339,
+      "level": "13.9",
+      "rate": "sssp",
+      "fs": "sync",
+      "dx_star": 2,
+      "dx_max": 377
+    },
+    {
+      "id": 8,
+      "song_name": "Edelweiss",
+      "achievements": 100.5824,
+      "dx_score": 311,
+      "level": "13.8",
+      "rate": "sssp",
+      "fc": "fc",
+      "dx_star": 5,
+      "dx_max": 321
+    },
+    {
+      "id": 9,
+      "song_name": "INTERNET YAMERO",
+      "achievements": 100.8521,
+      "dx_score": 310,
+      "level": "13.9",
+      "rate": "sssp",
+      "dx_star": 4,
+      "dx_max": 326
+    },
+    {
+      "id": 10,
+      "song_name": "偉大なる悪魔は実...",
+      "achievements": 100.7556,
+      "dx_score": 307,
+      "level": "13.8",
+      "rate": "sssp",
+      "fs": "sync",
+      "dx_star": 3,
+      "dx_max": 330
+    },
+    {
+      "id": 11,
+      "song_name": "Restricted Accel",
+      "achievements": 100.7342,
+      "dx_score": 306,
+      "level": "13.8",
+      "rate": "sssp",
+      "fs": "sync",
+      "dx_star": 5,
+      "dx_max": 315
+    },
+    {
+      "id": 12,
+      "song_name": "Lunatic Vibes",
+      "achievements": 100.6643,
+      "dx_score": 305,
+      "level": "13.8",
+      "rate": "sssp",
+      "fc": "ap",
+      "dx_star": 4,
+      "dx_max": 321
+    },
+    {
+      "id": 13,
+      "song_name": "ずんだパーリナイ",
+      "achievements": 100.5946,
+      "dx_score": 305,
+      "level": "13.8",
+      "rate": "sssp",
+      "fc": "fc",
+      "dx_star": 3,
+      "dx_max": 328
+    },
+    {
+      "id": 14,
+      "song_name": "RE:INCARNATED DRAGNER",
+      "achievements": 100.5805,
+      "dx_score": 304,
+      "level": "13.8",
+      "rate": "sssp",
+      "fs": "sync",
+      "dx_star": 2,
+      "dx_max": 338
+    },
+    {
+      "id": 15,
+      "song_name": "DEVOTION",
+      "achievements": 100.0188,
+      "dx_score": 288,
+      "level": "14.9",
+      "rate": "ss",
+      "fs": "sync",
+      "dx_star": 1,
+      "dx_max": 339
+    },
+    {
+      "id": 16,
+      "song_name": "きたさいたま2000",
+      "achievements": 100.7183,
+      "dx_score": 319,
+      "level": "13.8",
+      "rate": "sssp",
+      "fc": "fc",
+      "dx_star": 5,
+      "dx_max": 329
+    },
+    {
+      "id": 17,
+      "song_name": "BULK UP",
+      "achievements": 100.7041,
+      "dx_score": 319,
+      "level": "13.8",
+      "rate": "sssp",
+      "fc": "fc",
+      "dx_star": 5,
+      "dx_max": 329
+    },
+    {
+      "id": 18,
+      "song_name": "MAXRAGE",
+      "achievements": 100.6429,
+      "dx_score": 319,
+      "level": "13.8",
+      "rate": "sssp",
+      "fs": "sync",
+      "dx_star": 4,
+      "dx_max": 336
+    },
+    {
+      "id": 19,
+      "song_name": "デッドマンバラード",
+      "achievements": 100.6211,
+      "dx_score": 319,
+      "level": "13.8",
+      "rate": "sssp",
+      "fc": "fc",
+      "dx_star": 4,
+      "dx_max": 336
+    },
+    {
+      "id": 20,
+      "song_name": "インフェアエンジェル",
+      "achievements": 100.6042,
+      "dx_score": 319,
+      "level": "13.8",
+      "rate": "sssp",
+      "fs": "sync",
+      "dx_star": 3,
+      "dx_max": 343
+    }
+  ],
+  "ratingDistribution": [
+    {
+      "label": "SSS+",
+      "value": 18,
+      "color": "#ec654e"
+    },
+    {
+      "label": "SSS",
+      "value": 21,
+      "color": "#f2a34b"
+    },
+    {
+      "label": "SS",
+      "value": 9,
+      "color": "#438dcb"
+    },
+    {
+      "label": "S+",
+      "value": 2,
+      "color": "#326fb4"
+    }
+  ],
+  "constantDistribution": [1, 2, 4, 3, 5, 4, 15, 9, 12, 9, 11, 7, 4, 3, 2, 2],
+  "radar": [
+    {
+      "label": "均達",
+      "value": 88
+    },
+    {
+      "label": "技術",
+      "value": 84
+    },
+    {
+      "label": "豹速",
+      "value": 89
+    },
+    {
+      "label": "躲避",
+      "value": 95
+    },
+    {
+      "label": "手法",
+      "value": 90
+    },
+    {
+      "label": "跟定",
+      "value": 88
+    }
+  ]
+}

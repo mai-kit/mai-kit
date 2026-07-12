@@ -1,0 +1,19 @@
+{
+  "name": "mai-kit-docs",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "api": "typedoc",
+    "dev": "pnpm run api && vitepress dev",
+    "build": "pnpm run api && pnpm run test:generated && vitepress build",
+    "preview": "vitepress preview",
+    "test:generated": "node --test tests/*.test.js"
+  },
+  "devDependencies": {
+    "typedoc": "^0.28.14",
+    "typedoc-plugin-markdown": "^4.9.0",
+    "typedoc-vitepress-theme": "^1.1.2",
+    "vitepress": "^1.6.4"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "sortPackageJson": false,
+  "ignorePatterns": [
+    "dist",
+    "node_modules",
+    "pnpm-lock.yaml",
+    ".agents",
+    "packages/database/data",
+    "docs/api",
+    "docs/.vitepress/dist",
+    "docs/.vitepress/cache"
+  ]
+}

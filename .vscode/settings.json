@@ -1,0 +1,40 @@
+{
+  // 启用 Oxc；lint/format 规则与 typeAware 由仓库根 .oxlintrc.json / .oxfmtrc.json 提供，此处不重复写
+  "oxc.enable": true,
+  "oxc.requireConfig": true,
+
+  "editor.defaultFormatter": "oxc.oxc-vscode",
+  "editor.formatOnSave": true,
+  "editor.formatOnSaveMode": "file",
+  "editor.codeActionsOnSave": {
+    "source.format.oxc": "always",
+    "source.fixAll.oxc": "always"
+  },
+  "[javascript]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[javascriptreact]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[typescript]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[typescriptreact]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[json]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[jsonc]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+
+  // 本仓库用 oxlint/oxfmt，关掉 ESLint/Prettier 避免双跑
+  "eslint.enable": false,
+  "prettier.enable": false,
+
+  "js/ts.tsdk.path": "node_modules/typescript/lib",
+  "js/ts.tsdk.promptToUseWorkspaceVersion": true,
+
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/dist/**": true,
+    "**/.pnpm-store/**": true,
+    "packages/draw/output/**": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/.pnpm-store": true,
+    "packages/draw/output": true,
+    "pnpm-lock.yaml": true
+  }
+}
