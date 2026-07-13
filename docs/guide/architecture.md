@@ -12,6 +12,7 @@ mai-kit 按数据来源和处理阶段拆包。只安装实际需要的部分；
 | 生成成绩海报或 Best 图          | `@mai-kit/draw`                           |
 | 重算 B50、分析升分和比较快照    | `@mai-kit/analysis`                       |
 | 计算 Rating、达成率和 DX 分     | `@mai-kit/utils`                          |
+| 检查判定组合并计算剩余容错      | `@mai-kit/judgement-solver`               |
 | 直接读取徽章、字体或 resvg wasm | `@mai-kit/assets`                         |
 | 引用错误基类和 maimai 公共类型  | `@mai-kit/shared`（通常由其他包间接安装） |
 
@@ -27,6 +28,8 @@ mai-kit 按数据来源和处理阶段拆包。只安装实际需要的部分；
 - [Diving-Fish（水鱼）](https://www.diving-fish.com/maimaidx/prober/)：公开 B50 / Rating 排行、Import-Token、Developer-Token
 
 两种适配返回相同形态的 `profile` 和 `bests`，可以直接传给 `Draw.poster()`。
+通用档案只要求昵称与 Rating；好友码、段位、阶级和装备 id 仅在数据源实际提供时存在，
+适配器不会用 `0` 或占位名称伪装缺失数据。
 
 ### `@mai-kit/database`
 
@@ -35,6 +38,7 @@ mai-kit 按数据来源和处理阶段拆包。只安装实际需要的部分；
 包内提供 LXNS 和 Diving-Fish 实现，也可以自行实现 `MaimaiDatabase`。水鱼适配另有社区谱面
 统计；这类数据源特有能力留在适配器上，不进入通用接口。渲染海报时，将数据源传入
 `new Draw({ database })`。
+曲目模型中的数字版本、谱师、BPM 及 `SongList.genres` / `versions` 同样按数据源能力可选。
 
 ### `@mai-kit/draw`
 
@@ -54,6 +58,15 @@ mai-kit 按数据来源和处理阶段拆包。只安装实际需要的部分；
 - `@mai-kit/utils/judgement`：完整判定、规范化与判定计分
 - `@mai-kit/utils/song`：谱面查找、key 与曲目索引
 
+### `@mai-kit/judgement-solver`
+
+根据谱面物量、已有判定和最低达成率，以及可选的 DX 分与 FC/AP 约束，检查任意混合
+判定是否达标、求某一判定的剩余容错，并生成全部判定的独立容错表。正向计分复用 utils，
+不维护第二套公式。
+
+实现为纯 TypeScript，无 I/O、原生 addon 或 WASM，Node 与浏览器返回相同结果；网页、Bot
+和谱面对比只需准备物量并消费相同结果。
+
 ### `@mai-kit/analysis`
 
 消费已经取得的成绩与谱面定数，提供 Best50 重算、单谱面升分评估、候选排序和两份 B50
@@ -62,7 +75,9 @@ database 等来源准备。
 
 ### `@mai-kit/assets`
 
-提供段位、评级等徽章，以及 draw 使用的默认字体和 resvg wasm。`Draw` 已经接入这些资源；只有直接使用素材或布局层 API 时才需要单独导入。
+提供段位、评级等徽章，以及 draw 使用的默认字体和 resvg wasm。构建时会把徽章 PNG 合并
+为单一运行时清单，浏览器只需加载一次。`Draw` 已经接入这些资源；只有直接使用素材或
+布局层 API 时才需要单独导入。
 
 ### `@mai-kit/shared`
 
@@ -70,16 +85,19 @@ database 等来源准备。
 
 ## 组合方式
 
-| 用法              | 依赖                                     |
-| ----------------- | ---------------------------------------- |
-| 查询并生成海报    | prober + database + draw                 |
-| 查询后自行展示    | prober；需要曲名或封面时再加入 database  |
-| Rating 或成绩计算 | utils                                    |
-| B50 与升分分析    | prober + analysis；定数通常来自 database |
+| 用法               | 依赖                                     |
+| ------------------ | ---------------------------------------- |
+| 查询并生成海报     | prober + database + draw                 |
+| 查询后自行展示     | prober；需要曲名或封面时再加入 database  |
+| Rating 或成绩计算  | utils                                    |
+| 判定组合与容错预算 | judgement-solver + utils                 |
+| B50 与升分分析     | prober + analysis；定数通常来自 database |
 
 ## 运行环境
 
 各库均以 ES2023 为目标，支持 **Node.js** 和现代浏览器，公开 API 在两端保持相同语义。
+CI 通过 `pnpm test:web` 使用 Vite + headless Chrome 验证 judgement-solver、assets、database
+标签快照与 draw WASM 栅格化路径。
 
 - 保存图片到磁盘：在 Node 里用你自己的写文件方式；浏览器里可做成下载或上传。
 - 本地文件路径读图（例如本机封面路径）仅 Node 可用；Web 请使用 URL 或已准备好的图片数据。

@@ -25,7 +25,7 @@
 | 禁止默认真 Node  | 不要在核心路径静态绑死 `node:fs` / CWD；Node 专用逻辑用 dynamic import 或明确 Node-only API      |
 | 资源             | `import.meta.url` 定位；Node `file:` 可读盘，Web `fetch`；**对外仍统一**（如徽章都是 data URI）  |
 | 原生依赖         | 仅 Node 有实现时须 Web 替代（WASM 等）或明确 Node-only；**I/O 落盘/下载留给宿主**，库只产出数据  |
-| 验证             | 至少 Node 测通；Web 路径避免误打包仅 Node 的静态依赖                                             |
+| 验证             | Node 单测 + `pnpm test:web` 真实浏览器 smoke；Web 路径不得误打包仅 Node 的静态依赖               |
 
 当前例外示例（须在代码/README 可见）：
 
@@ -39,6 +39,7 @@
 packages/
 ├── shared/     # 共享：MaiKitError + maimai 领域原语（SongType / RateType / …）
 ├── utils/      # Rating、达成率、判定、DX 分、谱面索引等纯函数；无 I/O
+├── judgement-solver/ # 混合判定检查、剩余容错与独立容错表；纯 TypeScript、无 I/O
 ├── database/   # 游戏静态数据 + 素材（适配器；LXNS 公共 API，无鉴权）
 ├── prober/     # 查分器适配层（条件 client；personal / dev token）
 ├── analysis/   # Best50 重算、升分候选、成绩快照对比；纯分析
@@ -49,9 +50,13 @@ packages/
 ### 依赖方向（硬约束）
 
 ```
-shared  ←  utils  ←  database / prober / assets
-                    ↘ analysis（依赖 prober + utils）
-                    ↘ draw（依赖 prober + utils + assets）
+shared ← utils ← judgement-solver
+shared ← database
+shared ← prober ← analysis
+utils  ← analysis
+shared ← assets ← draw
+prober ← draw
+utils  ← draw
 ```
 
 | 规则                  | 说明                                                                                                                                     |
@@ -62,7 +67,8 @@ shared  ←  utils  ←  database / prober / assets
 | `draw` → `prober`     | 有 runtime 依赖（`Draw.poster` 等消费 prober 模型）。字段尽量透传，避免中间 DTO                                                          |
 | `draw` → `utils`      | `Draw` 出图时用 utils 算 `dx_max` / 定数 map；**填 dx_max 是 draw 职责**，不要丢给调用方                                                 |
 | `analysis`            | 依赖 prober 模型与 utils 公式；只做确定性内存分析，不请求 database / prober API                                                          |
-| `utils`               | 仅纯函数；不依赖 database/prober/analysis/draw                                                                                           |
+| `judgement-solver`    | 依赖 shared 的 FC 类型与 utils 判定公式；纯 TypeScript 求解，不维护第二套计分，不引入 I/O                                                |
+| `utils`               | 仅纯函数；不依赖 database/prober/analysis/judgement-solver/draw                                                                          |
 | 领域原语              | 放 `@mai-kit/shared`（`SongType` / `LevelIndex` / `FCType` / `FSType` / `RateType` / `Collection*`），database / prober 再导出，避免漂移 |
 
 新增包或跨包引用时先核对本表，再改 `package.json`。
@@ -83,6 +89,17 @@ shared  ←  utils  ←  database / prober / assets
 - 无 I/O、无适配器；包根导出常用稳定公式，高级公共入口为 `@mai-kit/utils/judgement` / `song`
 - 未列入 package `exports` 的源码模块属于内部实现；不提供 `internal` 公共入口
 - 海报场景下 **注入 chart.dx_max 仍由 draw 完成**（内部调 utils），用户不必拼 map
+- 随机成绩、判定预算或重依赖反推不进入 utils；组合检查与剩余容错由 `@mai-kit/judgement-solver` 提供
+
+### `@mai-kit/judgement-solver`
+
+- `evaluateJudgementPlan`：检查任意已有混合判定是否满足达成率 / DX 分 / FC 约束
+- `solveJudgementLimit`：在已有判定基础上，求某一目标判定还能新增多少个
+- `solveJudgementLimits`：生成全部非 CP 判定的独立剩余容错表，结果不可相加
+- 可叠加最低 DX 分与 `FCType`（FC / FC+ / AP / AP+）约束
+- 复用 `@mai-kit/utils` 的 `calculateAchievement` / `calculateChartDxScore`，不维护平行公式
+- 纯 TypeScript、无 I/O / Node API / 原生 addon / WASM；Node 与 Web 行为一致
+- 未分配 Note 明确补为 CP；已有判定不可被求解器删除或改写
 
 ### `@mai-kit/database`
 
@@ -114,7 +131,7 @@ shared  ←  utils  ←  database / prober / assets
 ### `@mai-kit/assets`
 
 - **统一静态资源**：徽章 PNG、默认字体、resvg wasm，都在本包 `assets/`
-- 徽章：`get*Badge` → data URI（无 codegen；top-level await 预载）
+- 徽章：`get*Badge` → data URI；build 将原始 PNG 合并为单一 `dist/badges.json`，top-level await 只读取一次清单
 - 字体 / wasm：`getDefaultFontBuffers` / `getResvgWasmBytes`（按需，模块缓存）
 - 双端一致：fs（Node `file:`）或 fetch（Web），API 无分叉
 - 不适合走 database CDN 的大批量 per-id 素材（封面 / 头像等）
@@ -146,21 +163,22 @@ createLxnsClient({ personalAccessToken })
 
 根目录 scripts（工具装在 workspace 根，子包不重复装 oxlint/tsdown/typescript）：
 
-| 命令                             | 作用                                                         |
-| -------------------------------- | ------------------------------------------------------------ |
-| `pnpm install`                   | 安装依赖                                                     |
-| `pnpm build`                     | 按 workspace 依赖拓扑构建所有库包                            |
-| `pnpm typecheck`                 | **先 build 再**各包 `tsc --noEmit`                           |
-| `pnpm test`                      | 各包 `test`（无 test 脚本的包会被 pnpm 跳过/报错视配置而定） |
-| `pnpm docs:dev` / `docs:build`   | VitePress + TypeDoc 自动 API 文档                            |
-| `pnpm changeset`                 | 记录待发版变更（写 `.changeset/*.md`）                       |
-| `pnpm ci:version` / `ci:publish` | 发版脚本（由 Release CI 调用；本地也可）                     |
-| `pnpm dev`                       | 各包 `tsdown --watch`                                        |
-| `pnpm clean`                     | 清理各包构建产物                                             |
-| `pnpm lint` / `lint:fix`         | 先 build，再运行 type-aware oxlint                           |
-| `pnpm format` / `format:check`   | oxfmt                                                        |
-| `pnpm check`                     | format:check + build + lint                                  |
-| `pnpm fix`                       | format + lint:fix                                            |
+| 命令                             | 作用                                                                    |
+| -------------------------------- | ----------------------------------------------------------------------- |
+| `pnpm install`                   | 安装依赖                                                                |
+| `pnpm build`                     | 按 workspace 依赖拓扑构建所有库包                                       |
+| `pnpm typecheck`                 | **先 build 再**各包 `tsc --noEmit`                                      |
+| `pnpm test`                      | 各包 `test`（无 test 脚本的包会被 pnpm 跳过/报错视配置而定）            |
+| `pnpm test:web`                  | Vite 构建后用 headless Chrome 验证 solver/assets/database/draw Web 路径 |
+| `pnpm docs:dev` / `docs:build`   | VitePress + TypeDoc 自动 API 文档                                       |
+| `pnpm changeset`                 | 记录待发版变更（写 `.changeset/*.md`）                                  |
+| `pnpm ci:version` / `ci:publish` | 发版脚本（由 Release CI 调用；本地也可）                                |
+| `pnpm dev`                       | 各包 `tsdown --watch`                                                   |
+| `pnpm clean`                     | 清理各包构建产物                                                        |
+| `pnpm lint` / `lint:fix`         | 先 build，再运行 type-aware oxlint                                      |
+| `pnpm format` / `format:check`   | oxfmt                                                                   |
+| `pnpm check`                     | format:check + build + lint                                             |
+| `pnpm fix`                       | format + lint:fix                                                       |
 
 单包：
 
@@ -411,9 +429,9 @@ export interface ProberPlayer { ... }
 
 - 包内静态资源用 `import.meta.url` 解析，**禁止**依赖 `process.cwd()`。
 - 包内资源读取须双端可用（Node `file:` 用 fs，Web 用 fetch）：**不要**假设 `fetch(fileURL)` 在 Node 可用。
-- 小图集素材包优先 **原样带 `assets/` + 路径解析**；不要无必要 codegen / 巨型生成物塞进 `src/`。
+- 小图集素材保留原始 `assets/` 作为构建源；运行时若需同步 getter，可在 `dist` 生成单一资源清单，禁止把巨型生成物塞进 `src/`。
 - 素材失败策略（draw）：单项 `getAsset` 失败回退占位，不拖垮整张海报。
-- Web bundler 消费 draw/assets 时：须能解析/拷贝 `@mai-kit/assets` 的 `assets/fonts/*` 与 `assets/resvg/*.wasm`（`new URL(..., import.meta.url)`）。
+- Web bundler 消费 draw/assets 时：须能解析/拷贝 `@mai-kit/assets` 的 `dist/badges.json`、`assets/fonts/*` 与 `assets/resvg/*.wasm`（静态 `new URL(..., import.meta.url)`）；用 `pnpm test:web` 验证。
 - database 缓存由适配器构造参数显式开启；不得在 draw 内再实现跨玩家数据 / 素材缓存。
 - 缓存失败不得静默绕过；失败不写缓存，相同进行中请求须合并。
 

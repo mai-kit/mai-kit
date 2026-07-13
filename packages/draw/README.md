@@ -94,8 +94,13 @@ import { buildSongLevelMap, scoreMapKey } from "@mai-kit/utils/song";
 const scores = await player.getScores();
 const { songs } = await database.getSongList();
 const levelMap = buildSongLevelMap(songs);
-const currentVersion = Math.max(0, ...songs.map((s) => s.version));
-const songVersion = new Map(songs.map((s) => [s.id, s.version]));
+const songVersion = new Map<number, number>();
+for (const song of songs) {
+  if (song.version !== undefined) songVersion.set(song.id, song.version);
+}
+const versions = [...songVersion.values()];
+if (versions.length === 0) throw new Error("database does not provide numeric versions");
+const currentVersion = Math.max(...versions);
 const entries = scores.flatMap((score) => {
   const levelValue = levelMap.get(scoreMapKey(score));
   return levelValue == null ? [] : [{ score, levelValue }];
@@ -103,7 +108,7 @@ const entries = scores.flatMap((score) => {
 const bests = await player.getBests();
 const candidates = rankBestsUpgradeCandidates(entries, {
   currentBests: bests,
-  isNewSong: (s) => (songVersion.get(s.id) ?? 0) === currentVersion,
+  isNewSong: (s) => songVersion.get(s.id) === currentVersion,
   minRate: "sssp", // 目标至少 SSS+；不限制评级时改传 targetAchievement
   limit: 10,
 });
@@ -126,6 +131,7 @@ const png = await new Draw({ database }).poster(data);
 ```
 
 数据源带曲目列表时，会自动补全 DX 满分 / 定数等展示字段。
+每次出图只读取一次曲目列表并建立一次索引；Best50 不会按 50 张卡重复扫描完整曲目表。
 
 ### 素材来源（database）
 
@@ -144,7 +150,8 @@ const draw = new Draw({ database });
 ```
 
 若 database 在创建时配置了 `DatabaseCacheStore`，draw 会自然复用其缓存；draw 本身不
-切换或重复实现跨玩家缓存。
+切换或重复实现跨玩家缓存。多曲封面按输入顺序返回，内部最多同时加载 8 项，避免浏览器
+或 CDN 被 B50 的瞬时并发压满。
 
 `assetFallback` 详见上文 [RenderOptions](#renderoptions各方法末位可选)。
 已提供 `coverDataUri` / `avatarDataUri` 时不会再走 database 拉取。
@@ -181,7 +188,7 @@ interface PlayerProfile {
   rating: number;
   course_rank?: number; // 昵称旁段位徽章（含 0=初学者）
   class_rank?: number; // 昵称旁阶级徽章（0–25）
-  icon?: Collection; // Draw 按 icon.id 拉头像
+  icon?: { id?: number }; // 有真实 id 时 Draw 才拉头像
   upload_time?: string;
   avatarDataUri?: string;
   avatarPath?: string;
@@ -209,6 +216,7 @@ interface PlayerProfile {
 ```bash
 pnpm --filter @mai-kit/draw test        # 单测（固定数据，先 build）
 pnpm --filter @mai-kit/draw test:integration:lxns   # 真数据集成（prober + database + 渲染）
+pnpm test:web                           # Vite 构建 + headless Chrome 双端 smoke
 ```
 
 `test:integration:lxns` 读取仓库根 `.env` 的 `LXNS_API_PERSONAL_ACCESS_TOKEN`；未设置则 skip。

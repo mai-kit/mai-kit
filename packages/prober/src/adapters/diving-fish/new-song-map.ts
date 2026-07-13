@@ -1,6 +1,7 @@
 import type { DivingFishHttp } from "./http";
+import { DivingFishProberError } from "./error";
 
-let cache: Promise<ReadonlyMap<number, boolean>> | undefined;
+let cache = new WeakMap<DivingFishHttp, Promise<ReadonlyMap<number, boolean>>>();
 
 /**
  * 构建 `song_id → 是否当前版本新曲` 映射（来自 `/music_data`，进程内缓存）。
@@ -12,8 +13,11 @@ let cache: Promise<ReadonlyMap<number, boolean>> | undefined;
 export async function getDivingFishIsNewMap(
   http: DivingFishHttp,
 ): Promise<ReadonlyMap<number, boolean>> {
-  cache ??= load(http);
-  return cache;
+  const existing = cache.get(http);
+  if (existing) return existing;
+  const pending = load(http);
+  cache.set(http, pending);
+  return pending;
 }
 
 /**
@@ -22,7 +26,7 @@ export async function getDivingFishIsNewMap(
  * @internal
  */
 export function resetDivingFishIsNewMapCache(): void {
-  cache = undefined;
+  cache = new WeakMap();
 }
 
 /**
@@ -32,19 +36,40 @@ export function resetDivingFishIsNewMapCache(): void {
 async function load(http: DivingFishHttp): Promise<ReadonlyMap<number, boolean>> {
   const raw = await http.musicData();
   const map = new Map<number, boolean>();
-  if (!isUnknownArray(raw)) return map;
+  if (!Array.isArray(raw)) {
+    throw new DivingFishProberError({
+      message: "Diving-Fish music_data: expected array",
+    });
+  }
   for (const item of raw) {
-    if (typeof item !== "object" || item === null) continue;
-    const id = Number("id" in item ? item.id : undefined);
-    if (!Number.isFinite(id)) continue;
+    if (typeof item !== "object" || item === null || !("id" in item)) {
+      throw invalidMusicData();
+    }
+    const id = Number(item.id);
+    if (!Number.isSafeInteger(id)) throw invalidMusicData();
     const basic = "basic_info" in item ? item.basic_info : undefined;
-    const isNew =
-      typeof basic === "object" && basic !== null && "is_new" in basic && Boolean(basic.is_new);
+    if (
+      typeof basic !== "object" ||
+      basic === null ||
+      !("is_new" in basic) ||
+      typeof basic.is_new !== "boolean"
+    ) {
+      throw invalidMusicData();
+    }
+    const isNew = basic.is_new;
+    const existing = map.get(id);
+    if (existing !== undefined && existing !== isNew) {
+      throw new DivingFishProberError({
+        message: `Diving-Fish music_data has conflicting is_new values for id=${id}`,
+      });
+    }
     map.set(id, isNew);
   }
   return map;
 }
 
-function isUnknownArray(value: unknown): value is unknown[] {
-  return Array.isArray(value);
+function invalidMusicData(): DivingFishProberError {
+  return new DivingFishProberError({
+    message: "Diving-Fish music_data: unexpected response structure",
+  });
 }

@@ -48,12 +48,19 @@ export interface BuddyNotes {
 
 /** 谱面难度（标准 / DX） */
 export interface SongDifficulty {
+  /** 谱面类型（标准谱面或 DX 谱面） */
   type: SongType;
+  /** 难度索引 */
   difficulty: LevelIndex;
-  level: string;
-  level_value: number;
-  note_designer: string;
-  version: number;
+  /** 等级文案；数据源提供时存在 */
+  level?: string;
+  /** 精确定数；数据源提供时存在 */
+  level_value?: number;
+  /** 谱师；数据源提供时存在 */
+  note_designer?: string;
+  /** 数字版本 id；数据源提供时存在 */
+  version?: number;
+  /** 谱面物量；查询请求包含物量时存在 */
   notes?: Notes;
 }
 
@@ -105,16 +112,27 @@ export interface SongDifficulties {
  * ```
  */
 export interface Song {
+  /** 曲目 id */
   id: number;
+  /** 曲名 */
   title: string;
-  artist: string;
-  genre: string;
-  bpm: number;
+  /** 艺术家；数据源提供时存在 */
+  artist?: string;
+  /** 流派；数据源提供时存在 */
+  genre?: string;
+  /** BPM；数据源提供时存在 */
+  bpm?: number;
+  /** 上游曲目地图字段；数据源提供时存在 */
   map?: string;
-  version: number;
+  /** 数字版本 id；数据源提供时存在 */
+  version?: number;
+  /** 版权说明；数据源提供时存在 */
   rights?: string;
+  /** 是否被数据源标记为禁用 */
   disabled?: boolean;
+  /** 标准 / DX / 宴会场的难度列表 */
   difficulties: SongDifficulties;
+  /** 是否被数据源标记为锁定 */
   locked?: boolean;
 }
 
@@ -134,9 +152,12 @@ export interface Version {
 
 /** 曲目列表查询结果 */
 export interface SongList {
+  /** 曲目列表 */
   songs: Song[];
-  genres: Genre[];
-  versions: Version[];
+  /** 流派表；数据源提供对应能力时存在 */
+  genres?: Genre[];
+  /** 版本表；数据源提供对应能力时存在 */
+  versions?: Version[];
 }
 
 /** 曲目别名 */

@@ -18,7 +18,11 @@ assets/
 └── resvg/
     └── index_bg.wasm   # Web 栅格化
 src/index.ts
+dist/badges.json        # build 时由上述徽章 PNG 合并；发布运行时读取
 ```
+
+徽章目录是仓库内的原始素材；发布包只携带单一 `dist/badges.json` 清单以及字体 / wasm，
+避免浏览器为每一张徽章分别发请求。
 
 ## 徽章 PNG
 
@@ -40,7 +44,7 @@ const tier = getDxStarAssetRate(5); // → 3
 if (tier) getDxStarBadge(tier);
 ```
 
-- 首次 `import` 时预载全部徽章（top-level await）
+- 首次 `import` 时通过 top-level await 读取一次徽章清单（不再逐图请求）
 - 可直接用于 `<img src>` / satori
 
 ## 字体与 Web 栅格化
@@ -53,5 +57,6 @@ const wasm = await getResvgWasmBytes(); // Web initWasm
 // bundler 也可跟 getResvgWasmUrl() 打包
 ```
 
-Web bundler 使用本包时：须能解析/拷贝 `assets/fonts/*` 与 `assets/resvg/*.wasm`
-（经 `import.meta.url`）。
+Web bundler 使用本包时：须能解析/拷贝 `dist/badges.json`、`assets/fonts/*` 与
+`assets/resvg/*.wasm`（经 `import.meta.url`）。仓库的 `pnpm test:web` 会用 Vite +
+headless Chrome 覆盖这些真实浏览器路径。

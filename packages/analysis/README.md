@@ -57,8 +57,13 @@ import { buildSongLevelMap, scoreMapKey } from "@mai-kit/utils/song";
 const [scores, bests] = await Promise.all([player.getScores(), player.getBests()]);
 const { songs } = await database.getSongList();
 const levelMap = buildSongLevelMap(songs);
-const currentVersion = Math.max(0, ...songs.map((s) => s.version));
-const songVersion = new Map(songs.map((s) => [s.id, s.version]));
+const songVersion = new Map<number, number>();
+for (const song of songs) {
+  if (song.version !== undefined) songVersion.set(song.id, song.version);
+}
+const versions = [...songVersion.values()];
+if (versions.length === 0) throw new Error("database does not provide numeric versions");
+const currentVersion = Math.max(...versions);
 const entries = scores.flatMap((score) => {
   const levelValue = levelMap.get(scoreMapKey(score));
   return levelValue == null ? [] : [{ score, levelValue }];
@@ -67,7 +72,7 @@ const entries = scores.flatMap((score) => {
 // 推荐：用评级定目标（SSS+）
 const candidates = rankBestsUpgradeCandidates(entries, {
   currentBests: bests,
-  isNewSong: (s) => (songVersion.get(s.id) ?? 0) === currentVersion,
+  isNewSong: (s) => songVersion.get(s.id) === currentVersion,
   minRate: "sssp",
   limit: 10,
 });

@@ -3,7 +3,7 @@
  *
  * `@mai-kit/assets` — 统一静态资源（徽章 / 字体 / resvg wasm）。
  *
- * - 徽章：`getRateBadge` 等 → **data URI**（模块加载时预读）
+ * - 徽章：`getRateBadge` 等 → **data URI**（模块加载时读取单一清单）
  * - 字体 / wasm：按需 `ArrayBuffer`（draw 渲染用）
  * - Node `file:` 走 fs，Web 走 fetch；**公开 API 无环境分叉**
  *
@@ -27,38 +27,6 @@ import type { FCType, FSType, RateType } from "@mai-kit/shared";
 /** DX 分数星星的素材档位（1–2 星→1，3–4 星→2，5 星→3） */
 export type DxStarAssetRate = 1 | 2 | 3;
 
-const RATE_NAMES = [
-  "sssp",
-  "sss",
-  "ssp",
-  "ss",
-  "sp",
-  "s",
-  "aaa",
-  "aa",
-  "a",
-  "bbb",
-  "bb",
-  "b",
-  "c",
-  "d",
-] as const;
-
-const BONUS_NAMES = [
-  "app",
-  "ap",
-  "fcp",
-  "fc",
-  "fsdp",
-  "fsd",
-  "fsp",
-  "fs",
-  "sync",
-  "blank",
-] as const;
-
-const DX_STAR_NAMES = ["1", "2", "3"] as const;
-
 function isNodeRuntime(): boolean {
   return (
     typeof process !== "undefined" &&
@@ -68,60 +36,63 @@ function isNodeRuntime(): boolean {
   );
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
-  if (typeof Buffer !== "undefined") {
-    return Buffer.from(bytes).toString("base64");
-  }
-  let binary = "";
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  }
-  return btoa(binary);
-}
-
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(copy).set(bytes);
   return copy;
 }
 
-/** 读取包内 `assets/<rel>` 为字节（双端） */
-async function readPackageBytes(rel: string): Promise<Uint8Array> {
-  const url = new URL(`../assets/${rel}`, import.meta.url);
+const NOTO_SANS_SC_URL = new URL(
+  "../assets/fonts/noto-sans-sc/NotoSansSC-Bold.otf",
+  import.meta.url,
+);
+const COMFORTAA_URL = new URL("../assets/fonts/comfortaa/Comfortaa-Bold.ttf", import.meta.url);
+const RESVG_WASM_URL = new URL("../assets/resvg/index_bg.wasm", import.meta.url);
+
+/** 读取一个由静态 `new URL(..., import.meta.url)` 定位的包内资源（双端）。 */
+async function readPackageBytes(url: URL, label: string): Promise<Uint8Array> {
   if (isNodeRuntime() && url.protocol === "file:") {
-    const fs = await import("node:fs");
-    return new Uint8Array(fs.readFileSync(url));
+    const fs = await import("node:fs/promises");
+    return new Uint8Array(await fs.readFile(url));
   }
   const res = await fetch(url);
   if (!res.ok) {
-    throw new Error(`@mai-kit/assets: failed to load ${rel}: HTTP ${res.status}`);
+    throw new Error(`@mai-kit/assets: failed to load ${label}: HTTP ${res.status}`);
   }
   return new Uint8Array(await res.arrayBuffer());
 }
 
-async function loadDataUri(rel: string): Promise<string> {
-  const bytes = await readPackageBytes(rel);
-  return `data:image/png;base64,${bytesToBase64(bytes)}`;
+/** category/name → data URI；构建时由原始 PNG 合并为单一清单。 */
+const BADGES = await loadBadgeManifest();
+
+async function loadBadgeManifest(): Promise<ReadonlyMap<string, string>> {
+  const url = new URL("./badges.json", import.meta.url);
+  let text: string;
+  if (isNodeRuntime() && url.protocol === "file:") {
+    const fs = await import("node:fs/promises");
+    text = await fs.readFile(url, "utf8");
+  } else {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`@mai-kit/assets: failed to load badge manifest: HTTP ${response.status}`);
+    }
+    text = await response.text();
+  }
+
+  const value: unknown = JSON.parse(text);
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value) ||
+    !Object.values(value).every(
+      (uri) => typeof uri === "string" && uri.startsWith("data:image/png;base64,"),
+    )
+  ) {
+    throw new Error("@mai-kit/assets: invalid badge manifest");
+  }
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return new Map(Object.entries(value as Record<string, string>));
 }
-
-/** category/name → data URI（模块加载时填满） */
-const BADGES: Map<string, string> = await (async () => {
-  const entries: Array<[string, string]> = [];
-  for (const name of RATE_NAMES) entries.push(["rank", name]);
-  for (const name of BONUS_NAMES) entries.push(["bonus", name]);
-  for (let id = 0; id <= 23; id += 1) entries.push(["course_rank", String(id)]);
-  for (let id = 0; id <= 25; id += 1) entries.push(["class_rank", String(id)]);
-  for (const name of DX_STAR_NAMES) entries.push(["dx_score", name]);
-
-  const pairs = await Promise.all(
-    entries.map(async ([category, name]) => {
-      const uri = await loadDataUri(`${category}/${name}.png`);
-      return [`${category}/${name}`, uri] as const;
-    }),
-  );
-  return new Map(pairs);
-})();
 
 function badge(category: string, name: string | number): string {
   const key = `${category}/${name}`;
@@ -134,7 +105,10 @@ function badge(category: string, name: string | number): string {
 
 /**
  * 评级徽章（`sssp`…`d`）→ PNG data URI。
- * @throws 未知 code 时
+ *
+ * @param code - 成绩评级码
+ * @returns 对应徽章的 PNG data URI
+ * @throws {Error} 资源清单中缺少对应徽章
  *
  * @example
  * ```ts
@@ -147,7 +121,10 @@ export function getRateBadge(code: RateType): string {
 
 /**
  * FC / AP / FS 等游玩标记徽章 → PNG data URI。
+ *
  * @param code - `FCType` 或 `FSType`
+ * @returns 对应徽章的 PNG data URI
+ * @throws {Error} 资源清单中缺少对应徽章
  *
  * @example
  * ```ts
@@ -160,7 +137,10 @@ export function getPlayBonusBadge(code: FCType | FSType): string {
 
 /**
  * 课段位徽章 → PNG data URI。
+ *
  * @param id - 与 prober `course_rank` 一致（含 0=初学者）
+ * @returns 对应徽章的 PNG data URI
+ * @throws {Error} 资源清单中缺少对应徽章
  *
  * @example
  * ```ts
@@ -173,7 +153,10 @@ export function getCourseRankBadge(id: number): string {
 
 /**
  * 对战阶级徽章 → PNG data URI。
+ *
  * @param id - 与 prober `class_rank` 一致（0–25）
+ * @returns 对应徽章的 PNG data URI
+ * @throws {Error} 资源清单中缺少对应徽章
  *
  * @example
  * ```ts
@@ -205,6 +188,10 @@ export function getDxStarAssetRate(dxStar: number): DxStarAssetRate | undefined 
 /**
  * 单颗 DX 星图 data URI。画 N 星时重复引用 N 次同一 URI。
  *
+ * @param rate - DX 分数星星的素材档位
+ * @returns 对应徽章的 PNG data URI
+ * @throws {Error} 资源清单中缺少对应徽章
+ *
  * @example
  * ```ts
  * const rate = getDxStarAssetRate(score.dx_star ?? 0);
@@ -235,6 +222,9 @@ let cachedFonts: Promise<DefaultFontBuffers> | undefined;
  * - 中文 / 日文：Noto Sans SC
  * - 英文装饰：Comfortaa
  *
+ * @returns 默认 CJK 与 Latin 字体字节
+ * @throws {Error} 字体资源读取或请求失败
+ *
  * @example
  * ```ts
  * const { notoSansSc, comfortaa } = await getDefaultFontBuffers();
@@ -247,8 +237,8 @@ let cachedFonts: Promise<DefaultFontBuffers> | undefined;
 export async function getDefaultFontBuffers(): Promise<DefaultFontBuffers> {
   cachedFonts ??= (async () => {
     const [cjk, latin] = await Promise.all([
-      readPackageBytes("fonts/noto-sans-sc/NotoSansSC-Bold.otf"),
-      readPackageBytes("fonts/comfortaa/Comfortaa-Bold.ttf"),
+      readPackageBytes(NOTO_SANS_SC_URL, "NotoSansSC-Bold.otf"),
+      readPackageBytes(COMFORTAA_URL, "Comfortaa-Bold.ttf"),
     ]);
     return {
       notoSansSc: toArrayBuffer(cjk),
@@ -261,6 +251,8 @@ export async function getDefaultFontBuffers(): Promise<DefaultFontBuffers> {
 /**
  * resvg-wasm 二进制 URL（bundler 可据此拷贝/打包）。
  *
+ * @returns 相对于当前模块解析的 wasm URL
+ *
  * @example
  * ```ts
  * const wasmUrl = getResvgWasmUrl();
@@ -268,13 +260,16 @@ export async function getDefaultFontBuffers(): Promise<DefaultFontBuffers> {
  * ```
  */
 export function getResvgWasmUrl(): URL {
-  return new URL("../assets/resvg/index_bg.wasm", import.meta.url);
+  return new URL(RESVG_WASM_URL);
 }
 
 let cachedWasm: Promise<ArrayBuffer> | undefined;
 
 /**
  * resvg-wasm 字节（Web `initWasm` 用）。
+ *
+ * @returns resvg-wasm 字节
+ * @throws {Error} wasm 资源读取或请求失败
  *
  * @example
  * ```ts
@@ -284,6 +279,6 @@ let cachedWasm: Promise<ArrayBuffer> | undefined;
  * ```
  */
 export async function getResvgWasmBytes(): Promise<ArrayBuffer> {
-  cachedWasm ??= readPackageBytes("resvg/index_bg.wasm").then(toArrayBuffer);
+  cachedWasm ??= readPackageBytes(RESVG_WASM_URL, "index_bg.wasm").then(toArrayBuffer);
   return cachedWasm;
 }

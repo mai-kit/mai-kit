@@ -2,6 +2,27 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createDivingFishClient } from "@mai-kit/prober";
 
+function assertConditionalApi(): void {
+  const publicClient = createDivingFishClient();
+  // @ts-expect-error 无 Import-Token 时类型上没有 me()
+  publicClient.me();
+
+  const importClient = createDivingFishClient({ importToken: "token" });
+  importClient.me();
+
+  void (async () => {
+    const publicPlayer = await publicClient.getPlayer({ username: "public" });
+    // @ts-expect-error 公开 query/player 不提供全量成绩能力
+    await publicPlayer.getScores();
+
+    const developerPlayer = await createDivingFishClient({ developerToken: "token" }).getPlayer({
+      qq: 123456,
+    });
+    await developerPlayer.getScores();
+  })();
+}
+void assertConditionalApi;
+
 const record = {
   achievements: 100.5,
   ds: 14.7,
@@ -33,7 +54,7 @@ void test("Diving-Fish exposes score queries only for complete-record clients", 
     if (url.pathname.endsWith("/rating_ranking")) {
       return jsonResponse([{ username: "DivingFish", ra: 16_000 }]);
     }
-    throw new Error(`Unexpected request: ${url}`);
+    throw new Error(`Unexpected request: ${String(url)}`);
   };
 
   try {

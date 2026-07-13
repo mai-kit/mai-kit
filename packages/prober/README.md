@@ -93,6 +93,12 @@ const ranking = await client.getRatingRanking();
 
 适配器保持只读：水鱼的账号资料修改、成绩导入 / 删除等写入接口不在本包范围内。
 
+通用 `PlayerProfile` 只要求昵称与 Rating。好友码、课段位、阶级、轮回星数以及装备
+收藏品 id 仅在数据源实际提供时存在；水鱼只返回牌子文案时会保留 `trophy.name`，不会
+伪造收藏品 id、好友码或阶级。`getPlayer({ qq })` 中的 QQ 仅用于定位水鱼账号，不会写入
+舞萌好友码。适配收到未知谱面类型、难度、评级或缺失 records/charts 时会抛
+`DivingFishProberError`，不会映射成 `BASIC`、`standard` 或空成绩。
+
 水鱼 HTTP 字段到通用 `Score` / `Bests` 的映射函数为**适配内部实现**，不从包根导出；
 请使用 `createDivingFishClient` 得到 `ProberPlayer` / `ScoresProberPlayer`。
 

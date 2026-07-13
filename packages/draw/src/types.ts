@@ -1,4 +1,4 @@
-import type { Collection, FCType, FSType, LevelIndex, RateType, SongType } from "@mai-kit/shared";
+import type { FCType, FSType, LevelIndex, RateType, SongType } from "@mai-kit/shared";
 import type { SongMeta } from "@mai-kit/utils/song";
 
 /* ── 素材来源（最小接口，不依赖 @mai-kit/database） ───────────────────── */
@@ -95,7 +95,10 @@ export interface PlayerProfile {
   /** 阶级 id（0–25）；有值时昵称旁显示阶级徽章 */
   class_rank?: number;
   /** 头像收藏品，Draw 按 icon.id 拉取头像图 */
-  icon?: Collection;
+  icon?: {
+    /** 收藏品 id；存在时用于加载玩家头像素材 */
+    id?: number;
+  };
   /** 上传时间，渲染时格式化为「生成于 ...」；缺省取当前时间 */
   upload_time?: string;
   /**

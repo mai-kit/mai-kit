@@ -10,7 +10,8 @@
   },
   "files": [
     "dist",
-    "assets",
+    "assets/fonts",
+    "assets/resvg",
     "README.md",
     "LICENSE"
   ],
@@ -28,7 +29,9 @@
     "dev": "tsdown --watch",
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "pnpm --filter @mai-kit/assets... run build && pnpm run test:unit",
+    "test:unit": "node --test tests/*.test.ts"
   },
   "dependencies": {
     "@mai-kit/shared": "workspace:*"

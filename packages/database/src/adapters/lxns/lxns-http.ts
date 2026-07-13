@@ -84,6 +84,13 @@ export class LxnsHttp {
       throw new LxnsDatabaseError({ code, status: response.status, message });
     }
 
+    if (body === undefined) {
+      throw new LxnsDatabaseError({
+        status: response.status,
+        message: `Lxns API returned invalid JSON (status: ${response.status})`,
+      });
+    }
+
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     return body as T;
   }

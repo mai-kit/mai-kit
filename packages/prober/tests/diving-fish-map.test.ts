@@ -1,15 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import {
-  mapDivingFishBestsFromCharts,
-  mapDivingFishBestsFromRecords,
-  mapDivingFishProfile,
-  mapDivingFishRecord,
-  mapDivingFishSongType,
-} from "../src/adapters/diving-fish/mappers.ts";
-import type { DivingFishRecord } from "../src/adapters/diving-fish/types.ts";
+import { createDivingFishClient, isDivingFishProberError, type Score } from "@mai-kit/prober";
 
-const sample: DivingFishRecord = {
+const sample = {
   achievements: 100.5492,
   ds: 14.7,
   dxScore: 2857,
@@ -24,26 +17,9 @@ const sample: DivingFishRecord = {
   type: "DX",
 };
 
-void test("mapDivingFishSongType maps DX/SD", () => {
-  assert.equal(mapDivingFishSongType("DX"), "dx");
-  assert.equal(mapDivingFishSongType("SD"), "standard");
-});
-
-void test("mapDivingFishRecord maps fields for draw", () => {
-  const score = mapDivingFishRecord(sample);
-  assert.equal(score.id, 11810);
-  assert.equal(score.type, "dx");
-  assert.equal(score.fc, "fc");
-  assert.equal(score.fs, null);
-  assert.equal(score.dx_score, 2857);
-  assert.equal(score.dx_rating, 330);
-  assert.equal(score.rate, "sssp");
-  assert.equal(score.level_index, 3);
-});
-
-void test("mapDivingFishBestsFromCharts uses dx/sd lists", () => {
+void test("Diving-Fish public B50 maps profile and scores without fabricated fields", async () => {
   const payload = {
-    rating: 16000,
+    rating: 16_000,
     nickname: "test",
     additional_rating: 17,
     plate: "煌将",
@@ -52,38 +28,145 @@ void test("mapDivingFishBestsFromCharts uses dx/sd lists", () => {
       sd: [{ ...sample, song_id: 9, type: "SD", ra: 200, title: "old" }],
     },
   };
-  const bests = mapDivingFishBestsFromCharts(payload);
-  assert.equal(bests.dx.length, 1);
-  assert.equal(bests.standard.length, 1);
-  assert.equal(bests.dx_total, 330);
-  assert.equal(bests.standard_total, 200);
-  const profile = mapDivingFishProfile(payload, 123);
-  assert.equal(profile.name, "test");
-  assert.equal(profile.course_rank, 17);
-  assert.equal(profile.friend_code, 123);
-  assert.equal(profile.trophy?.name, "煌将");
+
+  await withMockedFetch(payload, async () => {
+    const player = await createDivingFishClient({
+      baseURL: "https://example.test/api/",
+    }).getPlayer({ qq: 123 });
+    const [profile, bests] = await Promise.all([player.getProfile(), player.getBests()]);
+
+    assert.equal(profile.name, "test");
+    assert.equal(profile.course_rank, 17);
+    assert.equal(profile.friend_code, undefined);
+    assert.equal(profile.trophy?.name, "煌将");
+    assert.equal(profile.trophy?.id, undefined);
+    assert.equal(profile.class_rank, undefined);
+    assert.equal(profile.star, undefined);
+    assert.equal(bests.dx_total, 330);
+    assert.equal(bests.standard_total, 200);
+    assert.deepEqual(pickMappedScore(bests.dx[0]), {
+      id: 11810,
+      type: "dx",
+      fc: "fc",
+      fs: null,
+      dx_score: 2857,
+      dx_rating: 330,
+      rate: "sssp",
+      level_index: 3,
+    });
+  });
 });
 
-void test("mapDivingFishBestsFromRecords splits by is_new and ranks by ra", () => {
-  const records: DivingFishRecord[] = [
+void test("Diving-Fish public B50 rejects malformed required data", async () => {
+  const invalidPayloads = [
+    { rating: 15_000, charts: { dx: [], sd: [] } },
+    { rating: 15_000, nickname: "test" },
+    {
+      rating: 15_000,
+      nickname: "test",
+      charts: { dx: [{ ...sample, level_index: 9 }], sd: [] },
+    },
+    {
+      rating: 15_000,
+      nickname: "test",
+      charts: { dx: [{ ...sample, rate: "unknown" }], sd: [] },
+    },
+    {
+      rating: 15_000,
+      nickname: "test",
+      charts: { dx: [{ ...sample, type: "utage" }], sd: [] },
+    },
+  ];
+
+  for (const payload of invalidPayloads) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- fetch mock is process-global
+    await withMockedFetch(payload, async () => {
+      await assert.rejects(
+        createDivingFishClient({ baseURL: "https://example.test/api/" }).getPlayer({
+          username: "test",
+        }),
+        (error: unknown) => isDivingFishProberError(error),
+      );
+    });
+  }
+});
+
+void test("Diving-Fish complete records split B50 by music_data is_new", async () => {
+  const records = [
     { ...sample, song_id: 1, ra: 100, type: "DX" },
     { ...sample, song_id: 2, ra: 300, type: "DX" },
     { ...sample, song_id: 3, ra: 200, type: "SD" },
     { ...sample, song_id: 4, ra: 400, type: "SD" },
   ];
-  const isNew = new Map<number, boolean>([
-    [1, true],
-    [2, true],
-    [3, false],
-    [4, false],
-  ]);
-  const bests = mapDivingFishBestsFromRecords(records, isNew);
-  assert.deepEqual(
-    bests.dx.map((s) => s.id),
-    [2, 1],
+  const payload = { rating: 16_000, nickname: "test", records };
+  const musicData = [
+    { id: "1", basic_info: { is_new: true } },
+    { id: "2", basic_info: { is_new: true } },
+    { id: "3", basic_info: { is_new: false } },
+    { id: "4", basic_info: { is_new: false } },
+  ];
+
+  await withMockedEndpointFetch(
+    { "player/test_data": payload, music_data: musicData },
+    async () => {
+      const player = await createDivingFishClient({
+        baseURL: "https://example.test/api/",
+      }).getTestPlayer();
+      const bests = await player.getBests();
+      assert.deepEqual(
+        bests.dx.map((score) => score.id),
+        [2, 1],
+      );
+      assert.deepEqual(
+        bests.standard.map((score) => score.id),
+        [4, 3],
+      );
+    },
   );
-  assert.deepEqual(
-    bests.standard.map((s) => s.id),
-    [4, 3],
+
+  await withMockedEndpointFetch(
+    { "player/test_data": payload, music_data: musicData.slice(0, 1) },
+    async () => {
+      const player = await createDivingFishClient({
+        baseURL: "https://example.test/api/",
+      }).getTestPlayer();
+      await assert.rejects(player.getBests(), (error: unknown) => isDivingFishProberError(error));
+    },
   );
 });
+
+function pickMappedScore(score: Score | undefined) {
+  assert.ok(score);
+  return {
+    id: score.id,
+    type: score.type,
+    fc: score.fc,
+    fs: score.fs,
+    dx_score: score.dx_score,
+    dx_rating: score.dx_rating,
+    rate: score.rate,
+    level_index: score.level_index,
+  };
+}
+
+async function withMockedFetch(body: unknown, action: () => Promise<void>): Promise<void> {
+  await withMockedEndpointFetch({ "query/player": body }, action);
+}
+
+async function withMockedEndpointFetch(
+  bodies: Readonly<Record<string, unknown>>,
+  action: () => Promise<void>,
+): Promise<void> {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const pathname = new URL(input instanceof Request ? input.url : input).pathname;
+    const endpoint = pathname.split("/").filter(Boolean).slice(-2).join("/");
+    const body = bodies[endpoint] ?? bodies[pathname.split("/").filter(Boolean).at(-1) ?? ""];
+    return new Response(JSON.stringify(body));
+  };
+  try {
+    await action();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}

@@ -92,6 +92,13 @@ export class LxnsHttp {
 
     if (isLxnsEnvelope(body)) {
       if (body.success) {
+        if (body.data === undefined) {
+          throw new LxnsProberError({
+            code: body.code,
+            status: response.status,
+            message: "Lxns API success response is missing data",
+          });
+        }
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         return body.data as T;
       }
@@ -102,15 +109,12 @@ export class LxnsHttp {
       });
     }
 
-    if (response.ok) {
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return body as T;
-    }
-
     throw new LxnsProberError({
       code: response.status,
       status: response.status,
-      message: `Lxns API HTTP error (status: ${response.status})`,
+      message: response.ok
+        ? `Lxns API returned an invalid response envelope (status: ${response.status})`
+        : `Lxns API HTTP error (status: ${response.status})`,
     });
   }
 }

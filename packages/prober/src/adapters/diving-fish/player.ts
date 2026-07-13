@@ -7,6 +7,7 @@ import {
   mapDivingFishProfile,
   mapDivingFishRecord,
 } from "./mappers";
+import { DivingFishProberError } from "./error";
 import { getDivingFishIsNewMap } from "./new-song-map";
 import type { DivingFishPlayerPayload, DivingFishPlayerQuery } from "./types";
 
@@ -37,11 +38,10 @@ export class DivingFishPlayer<
    * 由公开 `query/player` 载荷构造（仅 B50 charts）。
    *
    * @param payload - 含 `charts.dx` / `charts.sd` 的响应
-   * @param friendCode - 写入 `PlayerProfile.friend_code`（无则 0）
    * @returns 只提供档案与 Best50 的玩家查询对象
    */
-  static fromQueryPayload(payload: DivingFishPlayerPayload, friendCode = 0): DivingFishPlayer {
-    const profile = mapDivingFishProfile(payload, friendCode);
+  static fromQueryPayload(payload: DivingFishPlayerPayload): DivingFishPlayer {
+    const profile = mapDivingFishProfile(payload);
     const bests = mapDivingFishBestsFromCharts(payload);
     return new DivingFishPlayer(async () => ({ profile, bests }));
   }
@@ -78,15 +78,13 @@ export class DivingFishScoresPlayer
    *
    * @param http - 用于拉取 `music_data` 判断新曲
    * @param payload - 含 `records` 的响应
-   * @param friendCode - 写入 `friend_code`
    * @returns 支持全量成绩查询的玩家对象
    */
   static fromRecordsPayload(
     http: DivingFishHttp,
     payload: DivingFishPlayerPayload,
-    friendCode = 0,
   ): DivingFishScoresPlayer {
-    return new DivingFishScoresPlayer(async () => buildRecordsData(http, payload, friendCode));
+    return new DivingFishScoresPlayer(async () => buildRecordsData(http, payload));
   }
 
   /**
@@ -112,9 +110,8 @@ export class DivingFishScoresPlayer
     http: DivingFishHttp,
     query: DivingFishPlayerQuery,
   ): DivingFishScoresPlayer {
-    const friendCode = "qq" in query ? Number(query.qq) || 0 : 0;
     return new DivingFishScoresPlayer(async () =>
-      buildRecordsData(http, await http.devRecords(query), friendCode),
+      buildRecordsData(http, await http.devRecords(query)),
     );
   }
 
@@ -139,12 +136,16 @@ export class DivingFishScoresPlayer
 async function buildRecordsData(
   http: DivingFishHttp,
   payload: DivingFishPlayerPayload,
-  friendCode = 0,
 ): Promise<DivingFishScoresPlayerData> {
   const isNew = await getDivingFishIsNewMap(http);
-  const records = payload.records ?? [];
+  if (!Array.isArray(payload.records)) {
+    throw new DivingFishProberError({
+      message: "Diving-Fish records response is missing records",
+    });
+  }
+  const records = payload.records;
   return {
-    profile: mapDivingFishProfile(payload, friendCode),
+    profile: mapDivingFishProfile(payload),
     bests: mapDivingFishBestsFromRecords(records, isNew),
     scores: records.map(mapDivingFishRecord),
   };

@@ -50,13 +50,14 @@ export class DivingFishHttp {
    * @throws {DivingFishProberError} 网络失败、用户不存在、隐私限制等
    */
   async queryPlayer(query: DivingFishPlayerQuery): Promise<DivingFishPlayerPayload> {
-    return this.requestJson<DivingFishPlayerPayload>("query/player", {
+    const body = await this.requestJson<unknown>("query/player", {
       method: "POST",
       body: {
         ...queryIdentity(query),
         b50: true,
       },
     });
+    return parsePlayerPayload(body, "query/player", "charts");
   }
 
   /**
@@ -66,7 +67,8 @@ export class DivingFishHttp {
    * @throws {DivingFishProberError} 网络或 HTTP 错误
    */
   async testData(): Promise<DivingFishPlayerPayload> {
-    return this.requestJson<DivingFishPlayerPayload>("player/test_data");
+    const body = await this.requestJson<unknown>("player/test_data");
+    return parsePlayerPayload(body, "player/test_data", "records");
   }
 
   /**
@@ -79,9 +81,10 @@ export class DivingFishHttp {
     if (!this.importToken) {
       throw new DivingFishProberError({ message: "importToken is required for /player/records" });
     }
-    return this.requestJson<DivingFishPlayerPayload>("player/records", {
+    const body = await this.requestJson<unknown>("player/records", {
       headers: { "Import-Token": this.importToken },
     });
+    return parsePlayerPayload(body, "player/records", "records");
   }
 
   /**
@@ -97,10 +100,11 @@ export class DivingFishHttp {
         message: "developerToken is required for /dev/player/records",
       });
     }
-    return this.requestJson<DivingFishPlayerPayload>("dev/player/records", {
+    const body = await this.requestJson<unknown>("dev/player/records", {
       headers: { "Developer-Token": this.developerToken },
       query: queryIdentity(query),
     });
+    return parsePlayerPayload(body, "dev/player/records", "records");
   }
 
   /**
@@ -205,6 +209,13 @@ export class DivingFishHttp {
         });
       }
 
+      if (body === undefined) {
+        throw new DivingFishProberError({
+          status: response.status,
+          message: `Diving-Fish ${path}: invalid JSON response`,
+        });
+      }
+
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       return body as T;
     });
@@ -232,4 +243,82 @@ function isRatingRankEntry(value: unknown): value is DivingFishRatingRankEntry {
     typeof value.ra === "number" &&
     Number.isFinite(value.ra)
   );
+}
+
+function parsePlayerPayload(
+  value: unknown,
+  endpoint: string,
+  mode: "charts" | "records",
+): DivingFishPlayerPayload {
+  if (!isRecord(value) || typeof value.rating !== "number" || !Number.isFinite(value.rating)) {
+    throw unexpectedPlayerPayload(endpoint);
+  }
+  if (value.nickname !== undefined && typeof value.nickname !== "string") {
+    throw unexpectedPlayerPayload(endpoint);
+  }
+  if (value.username !== undefined && typeof value.username !== "string") {
+    throw unexpectedPlayerPayload(endpoint);
+  }
+  if (
+    value.additional_rating !== undefined &&
+    (typeof value.additional_rating !== "number" || !Number.isFinite(value.additional_rating))
+  ) {
+    throw unexpectedPlayerPayload(endpoint);
+  }
+  if (value.plate !== undefined && typeof value.plate !== "string") {
+    throw unexpectedPlayerPayload(endpoint);
+  }
+
+  if (mode === "records") {
+    if (!Array.isArray(value.records) || !value.records.every(isDivingFishRecord)) {
+      throw unexpectedPlayerPayload(endpoint);
+    }
+  } else {
+    if (
+      !isRecord(value.charts) ||
+      !Array.isArray(value.charts.dx) ||
+      !Array.isArray(value.charts.sd) ||
+      !value.charts.dx.every(isDivingFishRecord) ||
+      !value.charts.sd.every(isDivingFishRecord)
+    ) {
+      throw unexpectedPlayerPayload(endpoint);
+    }
+  }
+
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return value as unknown as DivingFishPlayerPayload;
+}
+
+function isDivingFishRecord(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.achievements === "number" &&
+    Number.isFinite(value.achievements) &&
+    typeof value.ds === "number" &&
+    Number.isFinite(value.ds) &&
+    typeof value.dxScore === "number" &&
+    Number.isFinite(value.dxScore) &&
+    typeof value.fc === "string" &&
+    typeof value.fs === "string" &&
+    typeof value.level === "string" &&
+    typeof value.level_index === "number" &&
+    Number.isInteger(value.level_index) &&
+    typeof value.ra === "number" &&
+    Number.isFinite(value.ra) &&
+    typeof value.rate === "string" &&
+    typeof value.song_id === "number" &&
+    Number.isFinite(value.song_id) &&
+    typeof value.title === "string" &&
+    typeof value.type === "string"
+  );
+}
+
+function unexpectedPlayerPayload(endpoint: string): DivingFishProberError {
+  return new DivingFishProberError({
+    message: `Diving-Fish ${endpoint}: unexpected response structure`,
+  });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

@@ -37,7 +37,13 @@ jobs:
 
       - name: Typecheck
         # 依赖上一步 dist/*.d.ts，不再重复 build
-        run: pnpm --filter "./packages/*" -r run typecheck
+        run: pnpm --filter "./packages/*" -r run typecheck && pnpm exec tsc --noEmit -p tests/web/tsconfig.json
 
       - name: Unit tests
         run: pnpm --filter "./packages/*" -r --if-present run test:unit
+
+      - name: Set up Chrome
+        uses: browser-actions/setup-chrome@v2
+
+      - name: Browser smoke
+        run: pnpm test:web

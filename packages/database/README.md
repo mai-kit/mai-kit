@@ -22,6 +22,10 @@ const [tags] = await db.getChartTags([
 const jacket = await db.getAsset("jacket", 114);
 ```
 
+`Song` / `SongDifficulty` 中的数据源可选字段（如数字版本 id、谱师、BPM）只在上游实际
+提供时存在；`SongList.genres` / `versions` 同理。调用方需要版本判定时应先确认所选
+database 提供数字版本，而不是把缺失字段当作 `0`。
+
 ## 内置适配
 
 ```ts
@@ -44,6 +48,9 @@ console.log(master?.fit_diff, master?.avg);
 不加入通用 `MaimaiDatabase`。别名、收藏品及 jacket 以外的素材没有对等公开接口，调用
 对应通用方法会抛包级 `MaimaiDatabaseNotImplementedError`（可用
 `isMaimaiDatabaseNotImplementedError` 做降级，与 HTTP 失败区分）。
+
+水鱼曲目映射不会为缺少的数字版本、谱师、艺术家或 BPM 填 `0` / 空字符串；未知谱面
+类型、非法 id、难度数组错位或非法物量会抛 `DivingFishDatabaseError`。
 
 ## HTTP 超时 / 重试（可选）
 

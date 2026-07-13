@@ -1,63 +1,114 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DivingFishMaimaiDatabase } from "@mai-kit/database";
-import {
-  divingFishCoverId,
-  mapDivingFishMusicDataToSongList,
-} from "../src/adapters/diving-fish/map-songs.ts";
+import { DivingFishMaimaiDatabase, isDivingFishDatabaseError } from "@mai-kit/database";
 
-void test("divingFishCoverId pads and maps 10001-11000", () => {
-  assert.equal(divingFishCoverId(38), "00038");
-  assert.equal(divingFishCoverId(10038), "00038");
-  assert.equal(divingFishCoverId(11235), "11235");
+const entries = [
+  {
+    id: "8",
+    title: "True Love Song",
+    type: "SD",
+    ds: [5, 7.2, 10.2, 12.4],
+    level: ["5", "7", "10", "12"],
+    charts: [
+      { notes: [63, 23, 8, 2] },
+      { notes: [85, 27, 6, 4] },
+      { notes: [110, 56, 9, 2] },
+      { notes: [263, 14, 19, 6] },
+    ],
+    basic_info: { artist: "Kai", genre: "舞萌", bpm: 150, is_new: false },
+  },
+  {
+    id: "10030",
+    title: "ネコ日和。",
+    type: "DX",
+    ds: [5, 8.2, 11.7, 13.9],
+    level: ["5", "8", "11+", "13+"],
+    charts: [
+      { notes: [1, 0, 0, 0, 0] },
+      { notes: [1, 0, 0, 0, 0] },
+      { notes: [1, 0, 0, 0, 0] },
+      { notes: [417, 8, 91, 41, 74], charter: "test" },
+    ],
+    basic_info: { artist: "x", genre: "niconico", bpm: 200, is_new: true },
+  },
+];
+
+void test("Diving-Fish public song list maps SD/DX notes without fabricated metadata", async () => {
+  await withMockedFetch(entries, async () => {
+    const database = new DivingFishMaimaiDatabase({
+      baseURL: "https://example.test/api/",
+    });
+    const list = await database.getSongList({ notes: true });
+    assert.equal(list.songs.length, 2);
+
+    const standard = list.songs.find((song) => song.id === 8);
+    assert.ok(standard);
+    assert.equal(standard.difficulties.standard.length, 4);
+    assert.equal(standard.difficulties.dx.length, 0);
+    assert.equal(standard.difficulties.standard[3]?.notes?.total, 263 + 14 + 19 + 6);
+
+    const dx = list.songs.find((song) => song.id === 10030);
+    assert.ok(dx);
+    assert.equal(dx.difficulties.dx.length, 4);
+    assert.equal(dx.difficulties.dx[3]?.notes?.touch, 41);
+    assert.equal(dx.difficulties.dx[3]?.notes?.total, 417 + 8 + 91 + 41 + 74);
+    assert.equal(dx.difficulties.dx[3]?.note_designer, "test");
+    assert.equal(dx.version, undefined);
+    assert.equal(list.genres, undefined);
+    assert.equal(list.versions, undefined);
+  });
 });
 
-void test("mapDivingFishMusicDataToSongList merges SD/DX and notes", () => {
-  const entries = [
-    {
-      id: "8",
-      title: "True Love Song",
-      type: "SD",
-      ds: [5, 7.2, 10.2, 12.4],
-      level: ["5", "7", "10", "12"],
-      charts: [
-        { notes: [63, 23, 8, 2] },
-        { notes: [85, 27, 6, 4] },
-        { notes: [110, 56, 9, 2] },
-        { notes: [263, 14, 19, 6] },
-      ],
-      basic_info: { artist: "Kai", genre: "舞萌", bpm: 150, is_new: false },
-    },
-    {
-      id: "10030",
-      title: "ネコ日和。",
-      type: "DX",
-      ds: [5, 8.2, 11.7, 13.9],
-      level: ["5", "8", "11+", "13+"],
-      charts: [
-        { notes: [1, 0, 0, 0, 0] },
-        { notes: [1, 0, 0, 0, 0] },
-        { notes: [1, 0, 0, 0, 0] },
-        { notes: [417, 8, 91, 41, 74], charter: "test" },
-      ],
-      basic_info: { artist: "x", genre: "niconico", bpm: 200, is_new: true },
-    },
-  ];
+void test("Diving-Fish public song list rejects malformed fields", async () => {
+  const base = {
+    id: "8",
+    title: "Song",
+    type: "DX",
+    ds: [14.7],
+    level: ["14+"],
+    charts: [{ notes: [1, 2, 3, 4, 5] }],
+  };
+  for (const entry of [
+    { ...base, id: "invalid" },
+    { ...base, id: "" },
+    { ...base, type: "utage" },
+    { ...base, level: [] },
+    { ...base, title: null },
+    { ...base, level: [1] },
+    { ...base, charts: [{ notes: [1, 2] }] },
+    { ...base, charts: [{ notes: [1, 2, 3, 4, 5], charter: 1 }] },
+    null,
+  ]) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- fetch mock is process-global
+    await withMockedFetch([entry], async () => {
+      const database = new DivingFishMaimaiDatabase({
+        baseURL: "https://example.test/api/",
+      });
+      await assert.rejects(database.getSongList({ notes: true }), (error: unknown) =>
+        isDivingFishDatabaseError(error),
+      );
+    });
+  }
+});
 
-  const list = mapDivingFishMusicDataToSongList(entries, { notes: true });
-  assert.equal(list.songs.length, 2);
-  const sd = list.songs.find((s) => s.id === 8);
-  assert.ok(sd);
-  assert.equal(sd.difficulties.standard.length, 4);
-  assert.equal(sd.difficulties.dx.length, 0);
-  assert.equal(sd.difficulties.standard[3]?.notes?.total, 263 + 14 + 19 + 6);
-
-  const dx = list.songs.find((s) => s.id === 10030);
-  assert.ok(dx);
-  assert.equal(dx.difficulties.dx.length, 4);
-  assert.equal(dx.difficulties.dx[3]?.notes?.touch, 41);
-  assert.equal(dx.difficulties.dx[3]?.notes?.total, 417 + 8 + 91 + 41 + 74);
-  assert.equal(dx.difficulties.dx[3]?.note_designer, "test");
+void test("Diving-Fish cover requests use the normalized public CDN id", async () => {
+  const originalFetch = globalThis.fetch;
+  const paths: string[] = [];
+  globalThis.fetch = async (input) => {
+    paths.push(new URL(input instanceof Request ? input.url : input).pathname);
+    return new Response(new Uint8Array([1, 2, 3]));
+  };
+  try {
+    const database = new DivingFishMaimaiDatabase({
+      coverBaseURL: "https://example.test/covers/",
+    });
+    await database.getAsset("jacket", 38);
+    await database.getAsset("jacket", 10038);
+    await database.getAsset("jacket", 11235);
+    assert.deepEqual(paths, ["/covers/00038.png", "/covers/00038.png", "/covers/11235.png"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 void test("DivingFishMaimaiDatabase validates chart stats and maps empty charts to null", async () => {
@@ -101,3 +152,13 @@ void test("DivingFishMaimaiDatabase validates chart stats and maps empty charts 
     globalThis.fetch = originalFetch;
   }
 });
+
+async function withMockedFetch(body: unknown, action: () => Promise<void>): Promise<void> {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(body));
+  try {
+    await action();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}

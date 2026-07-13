@@ -239,10 +239,12 @@ export class Draw {
   /** 单曲成绩卡 SVG。 */
   async chartSvg(chart: ScoreChart, options: RenderOptions = {}): Promise<string> {
     const fallback = options.assetFallback ?? "error";
-    const enriched = await enrichChart(chart, this.database);
-    const resolvedChart = await resolveChartCover(enriched, this.database, fallback);
+    const [enriched] = await enrichCharts([chart], this.database);
+    const [resolvedChart, fonts] = await Promise.all([
+      resolveChartCover(enriched, this.database, fallback),
+      options.fonts ?? loadFonts(),
+    ]);
     try {
-      const fonts = options.fonts ?? (await loadFonts());
       const element = createElement(ChartCardPoster, {
         chart: resolvedChart,
         footerLeft: options.footerLeft,
@@ -276,19 +278,20 @@ export class Draw {
   async upgradesSvg(data: UpgradeBoardData, options: RenderOptions = {}): Promise<string> {
     assertUniformUpgradeTarget(data);
     const fallback = options.assetFallback ?? "error";
-    const candidates = await Promise.all(
-      data.candidates.map(async (row) => ({
-        ...row,
-        score: await resolveChartCover(
-          await enrichChart({ ...row.score, level_value: row.levelValue }, this.database),
-          this.database,
-          fallback,
-        ),
-      })),
+    const enriched = await enrichCharts(
+      data.candidates.map((row) => ({ ...row.score, level_value: row.levelValue })),
+      this.database,
     );
+    const [scores, fonts] = await Promise.all([
+      resolveChartCovers(enriched, this.database, fallback),
+      options.fonts ?? loadFonts(),
+    ]);
+    const candidates = data.candidates.map((row, index) => ({
+      ...row,
+      score: scores[index],
+    }));
     const resolved: UpgradeBoardData = { candidates };
     try {
-      const fonts = options.fonts ?? (await loadFonts());
       const element = createElement(UpgradesBoard, {
         data: resolved,
         footerLeft: options.footerLeft,
@@ -347,11 +350,13 @@ export class Draw {
 
   private async renderPosterSvg(data: PosterData, options: RenderOptions): Promise<string> {
     const fallback = options.assetFallback ?? "error";
-    const charts = await resolveChartCovers(data.charts, this.database, fallback);
-    const player = await resolvePlayerAvatar(data.player, this.database, fallback);
+    const [charts, player, fonts] = await Promise.all([
+      resolveChartCovers(data.charts, this.database, fallback),
+      resolvePlayerAvatar(data.player, this.database, fallback),
+      options.fonts ?? loadFonts(),
+    ]);
     const resolved: PosterData = { ...data, charts, player };
     try {
-      const fonts = options.fonts ?? (await loadFonts());
       const element = createElement(B50Poster, {
         data: resolved,
         footerLeft: options.footerLeft,
@@ -386,11 +391,13 @@ export class Draw {
     options: RenderOptions,
   ): Promise<string> {
     const fallback = options.assetFallback ?? "error";
-    const enriched = await Promise.all(charts.map(async (c) => enrichChart(c, this.database)));
-    const resolvedCharts = await resolveChartCovers(enriched, this.database, fallback);
-    const resolvedPlayer = await resolvePlayerAvatar(player, this.database, fallback);
+    const enriched = await enrichCharts(charts, this.database);
+    const [resolvedCharts, resolvedPlayer, fonts] = await Promise.all([
+      resolveChartCovers(enriched, this.database, fallback),
+      resolvePlayerAvatar(player, this.database, fallback),
+      options.fonts ?? loadFonts(),
+    ]);
     try {
-      const fonts = options.fonts ?? (await loadFonts());
       const element = createElement(BestBoard, {
         player: resolvedPlayer,
         charts: resolvedCharts,
@@ -459,16 +466,25 @@ function assertUniformUpgradeTarget(data: UpgradeBoardData): void {
   }
 }
 
-async function enrichChart(chart: ScoreChart, source: DrawSource): Promise<ScoreChart> {
-  if (chart.dx_max != null && chart.level_value != null) return chart;
-  if (typeof source.getSongList !== "function") return chart;
+async function enrichCharts(
+  charts: readonly ScoreChart[],
+  source: DrawSource,
+): Promise<ScoreChart[]> {
+  if (charts.every((chart) => chart.dx_max != null && chart.level_value != null)) {
+    return [...charts];
+  }
+  if (typeof source.getSongList !== "function") return [...charts];
   const { songs } = await source.getSongList({ notes: true });
-  const key = scoreMapKey(chart);
-  const dxMax = chart.dx_max ?? buildSongDxMaxMap(songs).get(key);
-  const levelValue = chart.level_value ?? buildSongLevelMap(songs).get(key);
-  return {
-    ...chart,
-    ...(dxMax != null ? { dx_max: dxMax } : {}),
-    ...(levelValue != null ? { level_value: levelValue } : {}),
-  };
+  const dxMaxMap = buildSongDxMaxMap(songs);
+  const levelMap = buildSongLevelMap(songs);
+  return charts.map((chart) => {
+    const key = scoreMapKey(chart);
+    const dxMax = chart.dx_max ?? dxMaxMap.get(key);
+    const levelValue = chart.level_value ?? levelMap.get(key);
+    return {
+      ...chart,
+      ...(dxMax != null ? { dx_max: dxMax } : {}),
+      ...(levelValue != null ? { level_value: levelValue } : {}),
+    };
+  });
 }

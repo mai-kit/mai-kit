@@ -2,6 +2,7 @@ import { LevelIndex } from "@mai-kit/shared";
 import type { FCType, FSType, RateType, SongType } from "@mai-kit/shared";
 import type { Bests, PlayerProfile, Score } from "../../models";
 import type { DivingFishPlayerPayload, DivingFishRecord } from "./types";
+import { DivingFishProberError } from "./error";
 
 const RATE_CODES = [
   "sssp",
@@ -43,49 +44,55 @@ function isFsType(value: string): value is FSType {
  * 谱面类型原文 → 通用 `SongType`。
  *
  * @param type - 上游 `DX` / `SD` 等
- * @returns `dx` 或 `standard`（无法识别时按 standard）
+ * @returns `dx` 或 `standard`
+ * @throws {DivingFishProberError} 无法识别的类型
  */
 export function mapDivingFishSongType(type: string): SongType {
   const t = type.trim().toUpperCase();
   if (t === "DX") return "dx";
   if (t === "SD" || t === "STANDARD") return "standard";
-  // Diving-Fish 无 utage 成绩类型
-  return "standard";
+  throw invalidField("record.type", type);
 }
 
 /**
  * 评级原文 → `RateType`。
  *
  * @param rate - 如 `sssp`、`aa`
- * @returns 合法评级；无法识别时为 `undefined`
+ * @returns 合法评级
+ * @throws {DivingFishProberError} 无法识别的评级
  */
-export function mapDivingFishRate(rate: string): RateType | undefined {
+export function mapDivingFishRate(rate: string): RateType {
   const key = rate.trim().toLowerCase();
-  return isRateType(key) ? key : undefined;
+  if (isRateType(key)) return key;
+  throw invalidField("record.rate", rate);
 }
 
 /**
  * FC 原文 → `FCType` 或 `null`。
  *
  * @param fc - `fc`/`fcp`/`ap`/`app` 或空串
- * @returns 合法 FC；空或未知为 `null`
+ * @returns 合法 FC；空值为 `null`
+ * @throws {DivingFishProberError} 非空但无法识别的 FC
  */
 export function mapDivingFishFc(fc: string): FCType | null {
-  if (!fc) return null;
   const key = fc.trim().toLowerCase();
-  return isFcType(key) ? key : null;
+  if (!key) return null;
+  if (isFcType(key)) return key;
+  throw invalidField("record.fc", fc);
 }
 
 /**
  * FS 原文 → `FSType` 或 `null`。
  *
  * @param fs - `sync`/`fs`/`fsp`/`fsd`/`fsdp` 或空串
- * @returns 合法 FS；空或未知为 `null`
+ * @returns 合法 FS；空值为 `null`
+ * @throws {DivingFishProberError} 非空但无法识别的 FS
  */
 export function mapDivingFishFs(fs: string): FSType | null {
-  if (!fs) return null;
   const key = fs.trim().toLowerCase();
-  return isFsType(key) ? key : null;
+  if (!key) return null;
+  if (isFsType(key)) return key;
+  throw invalidField("record.fs", fs);
 }
 
 /**
@@ -93,6 +100,7 @@ export function mapDivingFishFs(fs: string): FSType | null {
  *
  * @param record - 上游 records / charts 项
  * @returns 通用成绩
+ * @throws {DivingFishProberError} 必填成绩字段非法或枚举值无法识别
  *
  * @example
  * ```ts
@@ -100,14 +108,23 @@ export function mapDivingFishFs(fs: string): FSType | null {
  * console.log(score.id, score.level_index, score.achievements);
  * ```
  */
-export function mapDivingFishRecord(record: DivingFishRecord): Score {
+export function mapDivingFishRecord(record: DivingFishRecord): Score & { dx_rating: number } {
+  assertFiniteNumber(record.song_id, "record.song_id");
+  assertFiniteNumber(record.achievements, "record.achievements");
+  assertFiniteNumber(record.dxScore, "record.dxScore");
+  assertFiniteNumber(record.ra, "record.ra");
+  const title = record.title.trim();
+  if (!title) throw invalidField("record.title", record.title);
+
   const idx = record.level_index;
-  const levelIndex: LevelIndex =
-    idx === 0 || idx === 1 || idx === 2 || idx === 3 || idx === 4 ? idx : LevelIndex.BASIC;
+  if (idx !== 0 && idx !== 1 && idx !== 2 && idx !== 3 && idx !== 4) {
+    throw invalidField("record.level_index", idx);
+  }
+  const levelIndex: LevelIndex = idx;
 
   return {
     id: record.song_id,
-    song_name: record.title,
+    song_name: title,
     level: record.level,
     level_index: levelIndex,
     achievements: record.achievements,
@@ -124,22 +141,22 @@ export function mapDivingFishRecord(record: DivingFishRecord): Score {
  * 玩家顶栏字段 → 通用 {@link PlayerProfile}。
  *
  * @param payload - 上游玩家载荷
- * @param friendCode - 无好友码时填 `0`；有 QQ 查询时可传入 QQ 数字
- * @returns 通用档案（`class_rank` / `star` 水鱼无对等字段，置 0）
+ * @returns 仅包含水鱼实际提供字段的通用档案
+ * @throws {DivingFishProberError} 缺少昵称或 Rating 非法
  */
-export function mapDivingFishProfile(
-  payload: DivingFishPlayerPayload,
-  friendCode = 0,
-): PlayerProfile {
+export function mapDivingFishProfile(payload: DivingFishPlayerPayload): PlayerProfile {
+  assertFiniteNumber(payload.rating, "player.rating");
+  const name = payload.nickname?.trim() || payload.username?.trim();
+  if (!name) throw new DivingFishProberError({ message: "Diving-Fish player name is missing" });
+  if (payload.additional_rating !== undefined) {
+    assertFiniteNumber(payload.additional_rating, "player.additional_rating");
+  }
   const plate = payload.plate?.trim();
   return {
-    name: payload.nickname?.trim() || payload.username?.trim() || "Player",
+    name,
     rating: payload.rating,
-    friend_code: friendCode,
-    course_rank: payload.additional_rating ?? 0,
-    class_rank: 0,
-    star: 0,
-    trophy: plate ? { id: 0, name: plate } : undefined,
+    ...(payload.additional_rating !== undefined ? { course_rank: payload.additional_rating } : {}),
+    ...(plate ? { trophy: { name: plate } } : {}),
   };
 }
 
@@ -147,8 +164,8 @@ export function mapDivingFishProfile(
  * @param scores - 成绩列表
  * @returns `dx_rating` 合计
  */
-function sumRating(scores: readonly Score[]): number {
-  return scores.reduce((sum, s) => sum + (s.dx_rating ?? 0), 0);
+function sumRating(scores: readonly (Score & { dx_rating: number })[]): number {
+  return scores.reduce((sum, score) => sum + score.dx_rating, 0);
 }
 
 /**
@@ -156,10 +173,16 @@ function sumRating(scores: readonly Score[]): number {
  *
  * @param payload - 含 `charts` 的查询结果
  * @returns Best50（新 15 + 旧 35）
+ * @throws {DivingFishProberError} B50 分组缺失或任一成绩字段非法
  */
 export function mapDivingFishBestsFromCharts(payload: DivingFishPlayerPayload): Bests {
-  const dx = (payload.charts?.dx ?? []).map(mapDivingFishRecord);
-  const standard = (payload.charts?.sd ?? []).map(mapDivingFishRecord);
+  if (!payload.charts || !Array.isArray(payload.charts.dx) || !Array.isArray(payload.charts.sd)) {
+    throw new DivingFishProberError({
+      message: "Diving-Fish query/player response is missing charts.dx or charts.sd",
+    });
+  }
+  const dx = payload.charts.dx.map(mapDivingFishRecord);
+  const standard = payload.charts.sd.map(mapDivingFishRecord);
   return {
     dx,
     standard,
@@ -176,19 +199,27 @@ export function mapDivingFishBestsFromCharts(payload: DivingFishPlayerPayload): 
  * @param records - 完整成绩列表
  * @param isNewSong - `song_id` → 是否当前版本新曲（通常来自 `/music_data`）
  * @returns Best50
+ * @throws {DivingFishProberError} 曲目新旧分类缺失或任一成绩字段非法
  */
 export function mapDivingFishBestsFromRecords(
   records: readonly DivingFishRecord[],
   isNewSong: ReadonlyMap<number, boolean>,
 ): Bests {
-  const newScores: Score[] = [];
-  const oldScores: Score[] = [];
+  const newScores: Array<Score & { dx_rating: number }> = [];
+  const oldScores: Array<Score & { dx_rating: number }> = [];
   for (const record of records) {
     const score = mapDivingFishRecord(record);
-    if (isNewSong.get(score.id)) newScores.push(score);
+    const isNew = isNewSong.get(score.id);
+    if (isNew === undefined) {
+      throw new DivingFishProberError({
+        message: `Diving-Fish music_data is missing song id=${score.id}`,
+      });
+    }
+    if (isNew) newScores.push(score);
     else oldScores.push(score);
   }
-  const byRaDesc = (a: Score, b: Score) => (b.dx_rating ?? 0) - (a.dx_rating ?? 0);
+  const byRaDesc = (a: Score & { dx_rating: number }, b: Score & { dx_rating: number }): number =>
+    b.dx_rating - a.dx_rating;
   newScores.sort(byRaDesc);
   oldScores.sort(byRaDesc);
   const dx = newScores.slice(0, 15);
@@ -201,4 +232,14 @@ export function mapDivingFishBestsFromRecords(
     dx_selections: [],
     standard_selections: [],
   };
+}
+
+function assertFiniteNumber(value: number, field: string): void {
+  if (!Number.isFinite(value)) throw invalidField(field, value);
+}
+
+function invalidField(field: string, value: unknown): DivingFishProberError {
+  return new DivingFishProberError({
+    message: `Diving-Fish ${field} has an invalid value: ${String(value)}`,
+  });
 }

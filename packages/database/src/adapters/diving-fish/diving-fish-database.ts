@@ -98,8 +98,8 @@ export class DivingFishMaimaiDatabase implements MaimaiDatabase {
    * 曲目列表（来自 `/music_data`）。
    *
    * @param query - `notes: true` 时填充物量，供 draw 计算 `dx_max`
-   * @returns 通用 {@link SongList}（`genres`/`versions` 为空）
-   * @throws {DivingFishDatabaseError} 拉取失败或响应非数组
+   * @returns 通用 {@link SongList}（水鱼未提供的 `genres`/`versions` 字段省略）
+   * @throws {DivingFishDatabaseError} 拉取失败或响应结构错误
    */
   async getSongList(query?: SongListQuery): Promise<SongList> {
     const load = async () => {
@@ -285,7 +285,10 @@ export class DivingFishMaimaiDatabase implements MaimaiDatabase {
     return body as DivingFishMusicEntry[];
   }
 
-  /** @returns 指定公开端点的 JSON 响应 */
+  /**
+   * @returns 指定公开端点的 JSON 响应
+   * @throws {DivingFishDatabaseError} 网络、HTTP 或 JSON 解析失败
+   */
   private async fetchJson(path: string): Promise<unknown> {
     const url = new URL(path, this.baseURL);
     return this.coalescer.run(`GET ${url.href}`, async () => {
@@ -311,7 +314,15 @@ export class DivingFishMaimaiDatabase implements MaimaiDatabase {
           code: response.status,
         });
       }
-      return response.json();
+      try {
+        return await response.json();
+      } catch (error) {
+        throw new DivingFishDatabaseError({
+          status: response.status,
+          message: `Diving-Fish ${path}: invalid JSON response`,
+          cause: error,
+        });
+      }
     });
   }
 }

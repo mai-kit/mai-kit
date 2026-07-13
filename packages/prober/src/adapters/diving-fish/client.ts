@@ -128,8 +128,7 @@ export function createDivingFishClient<O extends DivingFishClientOptions>(
         return DivingFishScoresPlayer.fromDeveloperQuery(http, query);
       }
       const payload = await http.queryPlayer(query);
-      const friendCode = "qq" in query ? Number(query.qq) || 0 : 0;
-      return DivingFishPlayer.fromQueryPayload(payload, friendCode);
+      return DivingFishPlayer.fromQueryPayload(payload);
     },
     async getTestPlayer() {
       const payload = await http.testData();

@@ -115,7 +115,13 @@ export class LxnsMaimaiDatabase implements MaimaiDatabase {
     return this.cachedJson("collection-list", [type, query?.version, query?.required], async () => {
       const key = COLLECTION_LIST_KEY[type];
       const res = await this.http.get<Record<string, Collection[]>>(`${type}/list`, query);
-      return res[key] ?? [];
+      const collections = res[key];
+      if (!Array.isArray(collections)) {
+        throw new LxnsDatabaseError({
+          message: `Lxns ${type}/list response is missing array field "${key}"`,
+        });
+      }
+      return collections;
     });
   }
 

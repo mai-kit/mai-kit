@@ -6,6 +6,8 @@ import { bytesDataUri } from "./encoding";
 import { DrawError } from "./error";
 import type { AssetFallback, AssetSource, PlayerProfile, ScoreChart } from "./types";
 
+const ASSET_LOAD_CONCURRENCY = 8;
+
 /** 解析单曲封面（data URI ← path ← database jacket）。 */
 export async function resolveChartCover(
   chart: ScoreChart,
@@ -46,7 +48,22 @@ export async function resolveChartCovers(
   database: AssetSource | undefined,
   fallback: AssetFallback,
 ): Promise<ScoreChart[]> {
-  return Promise.all(charts.map(async (chart) => resolveChartCover(chart, database, fallback)));
+  const resolved = new Array<ScoreChart>(charts.length);
+  let nextIndex = 0;
+  const workers = Array.from(
+    { length: Math.min(ASSET_LOAD_CONCURRENCY, charts.length) },
+    async () => {
+      while (nextIndex < charts.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        const chart = charts[index];
+        // oxlint-disable-next-line eslint/no-await-in-loop -- each worker intentionally pulls one task at a time
+        if (chart) resolved[index] = await resolveChartCover(chart, database, fallback);
+      }
+    },
+  );
+  await Promise.all(workers);
+  return resolved;
 }
 
 /** 解析玩家头像（可选）。 */

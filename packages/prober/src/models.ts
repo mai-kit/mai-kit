@@ -30,13 +30,24 @@ export type {
 };
 
 /**
+ * 玩家当前装备的收藏品信息。
+ *
+ * 部分查分源只返回展示名称，不能提供收藏品 id；这与 database 中可按 id 查询的完整
+ * [Collection](/api/@mai-kit/shared/interfaces/Collection) 不同，因此 `id` 在玩家档案中是可选的。
+ */
+export interface PlayerCollection extends Omit<Collection, "id"> {
+  /** 收藏品 id；数据源未提供时省略 */
+  id?: number;
+}
+
+/**
  * 玩家档案（与具体查分服务无关的通用模型）。
  * 字段语义对齐常见查分器约定；可直接交给 `@mai-kit/draw` 的 `Draw.poster`。
  *
  * @example
  * ```ts
  * const profile: PlayerProfile = {
- *   name: "Player",
+ *   name: "Amatsuka",
  *   rating: 15_000,
  *   friend_code: 1234567890,
  *   course_rank: 10,
@@ -50,22 +61,22 @@ export interface PlayerProfile {
   name: string;
   /** 展示用总 Rating */
   rating: number;
-  /** 好友码；数据源不提供时可为 `0` */
-  friend_code: number;
-  /** 课段位 id（含 0=初学者） */
-  course_rank: number;
-  /** 阶级 id */
-  class_rank: number;
-  /** 轮回星数 */
-  star: number;
+  /** 好友码；数据源提供时存在 */
+  friend_code?: number;
+  /** 课段位 id（含 0=初学者）；数据源提供时存在 */
+  course_rank?: number;
+  /** 阶级 id；数据源提供时存在 */
+  class_rank?: number;
+  /** 轮回星数；数据源提供时存在 */
+  star?: number;
   /** 当前称号 */
-  trophy?: Collection;
+  trophy?: PlayerCollection;
   /** 头像收藏品；draw 按 `icon.id` 拉图 */
-  icon?: Collection;
+  icon?: PlayerCollection;
   /** 当前姓名框 */
-  name_plate?: Collection;
+  name_plate?: PlayerCollection;
   /** 当前背景 */
-  frame?: Collection;
+  frame?: PlayerCollection;
   /** 成绩上传时间（ISO 等） */
   upload_time?: string;
 }

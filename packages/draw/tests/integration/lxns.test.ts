@@ -121,10 +121,14 @@ void test(
 
     // 加分板：全曲 + 定数，按能否抬 B15/B35 排序（不是单曲随便抬达成率）
     const levelMap = buildSongLevelMap(songList.songs);
-    const songVersion = new Map(songList.songs.map((song) => [song.id, song.version]));
-    const currentVersion = Math.max(0, ...songList.songs.map((song) => song.version));
-    const isNewSong = (score: { id: number }) =>
-      (songVersion.get(score.id) ?? 0) === currentVersion;
+    const songVersion = new Map<number, number>();
+    for (const song of songList.songs) {
+      if (song.version !== undefined) songVersion.set(song.id, song.version);
+    }
+    const versions = [...songVersion.values()];
+    assert.ok(versions.length > 0, "LXNS 曲目表应提供数字版本");
+    const currentVersion = Math.max(...versions);
+    const isNewSong = (score: { id: number }) => songVersion.get(score.id) === currentVersion;
 
     const upgradeEntries = allScores.flatMap((score) => {
       const levelValue = levelMap.get(scoreMapKey(score));
