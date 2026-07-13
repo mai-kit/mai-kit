@@ -1,5 +1,12 @@
 # @mai-kit/analysis
 
+## 0.1.2
+
+### Patch Changes
+
+- Updated dependencies [3a0f621]
+  - @mai-kit/prober@0.2.0
+
 ## 0.1.1
 
 ### Patch Changes

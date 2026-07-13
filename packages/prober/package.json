@@ -1,6 +1,6 @@
 {
   "name": "@mai-kit/prober",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "舞萌 DX 玩家数据查询适配层，提供按令牌类型收窄的客户端接口。",
   "license": "MIT",
   "repository": {
