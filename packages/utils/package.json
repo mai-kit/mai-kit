@@ -1,6 +1,6 @@
 {
   "name": "@mai-kit/utils",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Rating、达成率、判定、DX 分和谱面处理等纯函数。",
   "license": "MIT",
   "repository": {

@@ -1,6 +1,6 @@
 {
   "name": "@mai-kit/analysis",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Best50 重算、升分候选与成绩快照对比。",
   "license": "MIT",
   "repository": {
