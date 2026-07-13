@@ -12,15 +12,14 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
-        # version 取自 package.json 的 packageManager
-
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
-          cache: pnpm
+
+      - name: Enable pnpm
+        run: corepack enable pnpm
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @mai-kit/database sync:dxrating-tags

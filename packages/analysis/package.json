@@ -2,25 +2,26 @@
   "name": "@mai-kit/analysis",
   "version": "0.1.0",
   "description": "Best50 重算、升分候选与成绩快照对比。",
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./package.json": "./package.json"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wsyzxjn/mai-kit.git",
+    "directory": "packages/analysis"
   },
   "files": [
     "dist",
-    "src",
     "README.md",
     "LICENSE"
   ],
-  "dependencies": {
-    "@mai-kit/prober": "workspace:*",
-    "@mai-kit/utils": "workspace:*"
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "scripts": {
     "dev": "tsdown --watch",
@@ -30,14 +31,11 @@
     "test": "pnpm --filter @mai-kit/analysis... run build && pnpm run test:unit",
     "test:unit": "node --test tests/*.test.ts"
   },
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/wsyzxjn/mai-kit.git",
-    "directory": "packages/analysis"
+  "dependencies": {
+    "@mai-kit/prober": "workspace:*",
+    "@mai-kit/utils": "workspace:*"
   },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
+  "devDependencies": {
+    "@types/node": "^24.5.1"
   }
 }

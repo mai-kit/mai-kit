@@ -1,35 +1,31 @@
 {
   "name": "mai-kit",
-  "private": true,
   "version": "0.0.0",
-  "type": "module",
+  "private": true,
   "description": "舞萌 DX TypeScript 工具集。",
-  "packageManager": "pnpm@11.10.0",
-  "engines": {
-    "node": ">=24"
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wsyzxjn/mai-kit.git"
   },
+  "type": "module",
   "scripts": {
     "build": "pnpm --filter './packages/*' -r run build",
     "dev": "pnpm --filter './packages/*' -r --parallel run dev",
     "typecheck": "pnpm run build && pnpm --filter './packages/*' -r run typecheck",
     "test": "pnpm run build && pnpm --filter './packages/*' -r --if-present run test:unit",
     "clean": "pnpm --filter './packages/*' -r run clean",
-    "lint": "oxlint .",
-    "lint:fix": "oxlint --fix .",
+    "lint": "pnpm run build && oxlint .",
+    "lint:fix": "pnpm run build && oxlint --fix .",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
-    "check": "oxfmt --check . && oxlint .",
-    "fix": "oxfmt --write . && oxlint --fix .",
+    "check": "pnpm run format:check && pnpm run lint",
+    "fix": "pnpm run format && pnpm run lint:fix",
     "docs:dev": "pnpm run build && pnpm --filter mai-kit-docs dev",
     "docs:build": "pnpm run build && pnpm --filter mai-kit-docs build",
     "docs:preview": "pnpm --filter mai-kit-docs preview",
     "changeset": "changeset",
     "ci:version": "changeset version",
     "ci:publish": "pnpm build && changeset publish"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/wsyzxjn/mai-kit.git"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
@@ -39,5 +35,9 @@
     "oxlint-tsgolint": "^0.24.0",
     "tsdown": "^0.22.3",
     "typescript": "^6.0.3"
-  }
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.12.0"
 }

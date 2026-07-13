@@ -32,18 +32,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # changesets 需要完整历史以生成 changelog
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
           registry-url: https://registry.npmjs.org
-          cache: pnpm
+
+      - name: Enable pnpm
+        run: corepack enable pnpm
 
       # Trusted Publishing 需要足够新的 npm
       - name: Ensure npm ≥ 11.5.1
@@ -53,11 +53,8 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # 发版前再跑门禁，避免脏版本进 registry
-      - name: Format & lint
+      - name: Build & check
         run: pnpm check
-
-      - name: Build packages
-        run: pnpm build
 
       - name: Typecheck
         run: pnpm --filter "./packages/*" -r run typecheck

@@ -1,5 +1,5 @@
 {
-  "sortPackageJson": false,
+  "sortPackageJson": true,
   "ignorePatterns": [
     "dist",
     "node_modules",

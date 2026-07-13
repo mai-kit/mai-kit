@@ -157,9 +157,9 @@ createLxnsClient({ personalAccessToken })
 | `pnpm ci:version` / `ci:publish` | 发版脚本（由 Release CI 调用；本地也可）                     |
 | `pnpm dev`                       | 各包 `tsdown --watch`                                        |
 | `pnpm clean`                     | 清理各包构建产物                                             |
-| `pnpm lint` / `lint:fix`         | oxlint                                                       |
+| `pnpm lint` / `lint:fix`         | 先 build，再运行 type-aware oxlint                           |
 | `pnpm format` / `format:check`   | oxfmt                                                        |
-| `pnpm check`                     | format:check + lint                                          |
+| `pnpm check`                     | format:check + build + lint                                  |
 | `pnpm fix`                       | format + lint:fix                                            |
 
 单包：
@@ -172,14 +172,15 @@ pnpm --filter @mai-kit/draw test:integration:lxns   # 真数据集成
 
 ### 架构硬规则（改工具链前必读）
 
-1. **tsdown 独占 `dist`**；`tsc` 只 `--noEmit`，禁止让 typecheck 写出文件。
+1. **tsdown 独占 `dist`**；`tsc` 只 `--noEmit`，禁止让 typecheck 写出文件。type-aware lint 同样依赖跨包 `dist/*.d.ts`，所以根 `lint` / `check` 必须 build-first，并在清空 `dist` 后仍能独立通过。
 2. **不用 TS Project References**（`composite` / `references`）；跨包类型走 `exports` → 已构建的 `dist/*.d.ts`。
 3. JavaScript 基线固定为 **ES2023**：base `target` / `lib` 与每包 tsdown `target` 保持一致。
 4. **`moduleResolution: "bundler"`** + `module: "esnext"`；源码相对 import / export 不带扩展名。
-5. tsdown 两个必要 override：`fixedExtension: false`（发布产物为 `.js` 不是 `.mjs`）、`hash: false`（稳定文件名）。删前务必 build 检查 `dist/`。
+5. tsdown 开启 `exports: true`，由入口和产物自动生成各包 `package.json#exports`；`fixedExtension: false`（发布产物为 `.js` 不是 `.mjs`）、`hash: false`（稳定文件名）是必要 override。改配置后务必 build 并检查生成的 manifest 与 `dist/`。
 6. **不用 `paths` 指到源码**做跨包 typecheck；保持 build-first。
 7. `@types/node`：base `types: ["node"]`；**使用 Node API 的子包**在自身 `devDependencies` 声明。
-8. 细节与脚手架模板见 `.agents/skills/ts-library-monorepo/SKILL.md`。
+8. CI 先用 `actions/setup-node` 读取 `.node-version`，再由 `corepack enable pnpm` 根据根 `packageManager` 启用精确 pnpm 版本；不要再叠加自带旧 pnpm bootstrap 的 setup action。
+9. 细节与脚手架模板见 `.agents/skills/ts-library-monorepo/SKILL.md`。
 
 ## 代码约定
 
@@ -266,7 +267,7 @@ pnpm --filter @mai-kit/draw test:integration:lxns   # 真数据集成
 
 ```
 packages/<name>/
-├── package.json          # exports → dist；files 含 dist / README
+├── package.json          # exports → dist；files 只含发布产物 / 运行时资源 / README / LICENSE
 ├── tsconfig.json         # extends ../../tsconfig.base.json
 ├── tsdown.config.ts
 ├── src/
@@ -278,6 +279,7 @@ packages/<name>/
 ```
 
 - 公共 API 只从 `src/index.ts` 导出（多 entry 时在 package `exports` / tsdown 明确声明）。
+- 常规库包的 `files` **不带 `src`**；只发布 `dist`、README、LICENSE 与确实在运行时读取的 `assets` / `data`。发版前可用 `pnpm pack --dry-run --json` 查看实际 tarball 清单。
 - **未从包根 `index` 导出的模块 = 内部实现**（适配内 `mappers`、`chart-tags`、`http` 私有类等）；测试可相对路径引用源码，**不要**为测而扩大公开面。
 - 源码相对 import / export **不带扩展名**，由 `moduleResolution: "bundler"` 与 tsdown 解析；发布产物仍是 `.js`。
 - draw：入口类 `draw.ts`（无 JSX，`createElement`）；**所有 `.tsx` 布局组件放 `components/`**。
@@ -441,7 +443,7 @@ export interface ProberPlayer { ... }
 
 | 顺序 | 命令                             | 含义                                          |
 | ---- | -------------------------------- | --------------------------------------------- |
-| 1    | `pnpm check`                     | oxfmt + oxlint（格式与静态检查）              |
+| 1    | `pnpm check`                     | build-first：oxfmt + oxlint                   |
 | 2    | 相关包 `pnpm test`               | 至少覆盖改动涉及的包                          |
 | 3    | 触及类型/跨包时 `pnpm typecheck` | build-first 全仓类型检查                      |
 | 4    | 触及文档时 `pnpm docs:build`     | 重生 TypeDoc API + VitePress 构建与生成物测试 |

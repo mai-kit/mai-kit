@@ -19,28 +19,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
-        # version 取自 package.json 的 packageManager
-
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
-          cache: pnpm
+
+      - name: Enable pnpm
+        run: corepack enable pnpm
 
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # 与 AGENTS.md 交付门禁一致：format + lint → build → typecheck → unit test
-      - name: Format & lint
+      # check 会先 build，供 type-aware lint 解析跨包 dist/*.d.ts
+      - name: Build & check
         run: pnpm check
 
-      - name: Build packages
-        run: pnpm build
-
       - name: Typecheck
-        # build-first：依赖上一步 dist/*.d.ts，不再重复 build
+        # 依赖上一步 dist/*.d.ts，不再重复 build
         run: pnpm --filter "./packages/*" -r run typecheck
 
       - name: Unit tests

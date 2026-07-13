@@ -53,6 +53,10 @@ importers:
       '@mai-kit/utils':
         specifier: workspace:*
         version: link:../utils
+    devDependencies:
+      '@types/node':
+        specifier: ^24.5.1
+        version: 24.13.2
 
   packages/assets:
     dependencies:
@@ -135,6 +139,10 @@ importers:
       '@mai-kit/shared':
         specifier: workspace:*
         version: link:../shared
+    devDependencies:
+      '@types/node':
+        specifier: ^24.5.1
+        version: 24.13.2
 
 packages:
 

@@ -4,6 +4,7 @@ export default defineConfig({
   entry: ["src/index.ts"],
   format: ["esm"],
   target: "es2023",
+  exports: true,
   fixedExtension: false,
   hash: false,
   sourcemap: false,

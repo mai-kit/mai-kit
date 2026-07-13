@@ -2,23 +2,28 @@
   "name": "@mai-kit/database",
   "version": "0.1.0",
   "description": "基于适配器模式的舞萌 DX 游戏数据与素材访问。",
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./package.json": "./package.json"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wsyzxjn/mai-kit.git",
+    "directory": "packages/database"
   },
   "files": [
     "dist",
     "data",
-    "src",
     "README.md",
     "LICENSE"
   ],
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "dev": "tsdown --watch",
     "build": "tsdown",
@@ -33,15 +38,5 @@
   },
   "devDependencies": {
     "@types/node": "^24.5.1"
-  },
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/wsyzxjn/mai-kit.git",
-    "directory": "packages/database"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
   }
 }
