@@ -272,6 +272,128 @@ dist
 
 ---
 
+## GitHub Actions — validate once, release from the validated commit
+
+For a publishable monorepo, keep **source validation**, **package release**, and **deployment** as separate trust boundaries:
+
+```
+pull_request ──> CI (build once + every gate)
+main push ─────> CI (same gates + reusable artifacts)
+                    ├─ success ─> Release (Version PR or OIDC publish)
+                    └─ success ─> Deploy (consume validated artifact only)
+```
+
+### 1. CI is the only source gate
+
+- Trigger on `pull_request`, `push` to `main`, and optionally `workflow_dispatch` for diagnostics.
+- Build packages **once**. Run typecheck, unit tests, docs, and browser smoke against that `dist`.
+- Keep standalone local scripts build-first, but add explicit CI-only built entries:
+
+```json
+{
+  "scripts": {
+    "test:web": "pnpm run build && pnpm run test:web:built",
+    "test:web:built": "vite build tests/web && node tests/web/run.mjs",
+    "docs:build": "pnpm run build && pnpm run docs:build:built",
+    "docs:build:built": "pnpm --filter docs build"
+  }
+}
+```
+
+After `pnpm check` has built the workspace, CI calls only `test:web:built` / `docs:build:built`. Do not hide an unconditional build inside every CI step.
+
+If a downstream deployment needs generated files, upload them only for a `main` push after all relevant generation/verification steps. A normal `actions/upload-artifact` artifact can be downloaded by a later `workflow_run` using the triggering run id.
+
+### 2. Release runs only after successful main CI
+
+Use `workflow_run`, not a second `push` workflow that repeats all gates:
+
+```yaml
+name: Release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  release:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      # setup runtime and install frozen dependencies
+      - uses: changesets/action@v1
+        with:
+          branch: main
+          version: pnpm run ci:version
+          publish: pnpm run ci:publish
+```
+
+`workflow_run` is privileged: it can receive write permissions and secrets even when the upstream workflow cannot. Therefore all four checks above are mandatory, and the privileged workflow must never checkout a PR/fork head or execute an untrusted artifact. Checkout `workflow_run.head_sha`, not an implicitly newer `main`.
+
+Release does **not** rerun format, lint, typecheck, tests, docs, or browser smoke. A publish command should still perform one fresh package build immediately before `changeset publish`; that build produces the exact tarball being released.
+
+When using Changesets from `workflow_run`, set its `branch` input explicitly (`main` here). The checkout is intentionally an exact detached SHA, so branch inference is not a suitable release contract.
+
+Pull requests created or updated with the repository `GITHUB_TOKEN` can produce approval-required `pull_request` runs. The post-merge main CI remains the hard publish gate, so this does not weaken release safety. If branch policy requires bot-created Version PR checks to start automatically, use a narrowly scoped GitHub App installation token; do not introduce a broad personal token merely to bypass approval.
+
+Avoid a manual Release trigger that bypasses CI. Rerun the failed CI or Release workflow instead. If a manual path is truly required, it must independently execute the full validation contract before publishing.
+
+### 3. Pages/deploy workflows consume artifacts, not source
+
+For a privileged deployment triggered from CI:
+
+- Apply the same success/event/branch/repository filter as Release.
+- Give it only the permissions it needs (`actions: read`, deployment permission, OIDC if required).
+- Download the artifact with `actions/download-artifact`, `run-id: ${{ github.event.workflow_run.id }}`, and `github-token`.
+- Prefer downloading into `${{ runner.temp }}`. Do not checkout or run repository scripts in this workflow.
+
+This keeps external deployment failure separate from CI/release eligibility while avoiding a second dependency install and build.
+
+### 4. npm Trusted Publishing (OIDC)
+
+Release requirements:
+
+- GitHub-hosted runner (not self-hosted).
+- `permissions: id-token: write`.
+- `actions/setup-node` with the npm registry URL; disable release dependency caching when reproducibility matters.
+- Node `>=22.14.0`; pin a known-good npm version rather than installing `npm@latest` (mai-kit uses `npm@11.16.0`).
+- No `NPM_TOKEN` or `NODE_AUTH_TOKEN` for publish.
+- Every published package has `publishConfig.access: "public"`, a repository URL matching the GitHub repo, and only the intended runtime files.
+- Keep the `npm publish` command in the workflow file registered with npm. With `workflow_call`, npm may validate the caller workflow filename instead.
+
+Configure each package after its name exists on the registry (the trust command requires an existing package):
+
+```bash
+npm trust github @scope/pkg \
+  --file release.yml \
+  --repo owner/repo \
+  --allow-publish \
+  --yes
+
+npm trust list @scope/pkg --json
+```
+
+The workflow filename is case-sensitive and is only the basename (`release.yml`, not `.github/workflows/release.yml`). The registry currently allows one trusted publisher configuration per package. A brand-new package therefore needs one authenticated bootstrap publish before OIDC can be attached; inspect the tarball first and do not claim local provenance.
+
+After the OIDC publish path has succeeded, restrict the package's Publishing access to disallow traditional token publishing and revoke obsolete automation tokens. Do this after verification so maintainers retain a recovery path during migration.
+
+---
+
 ## Gotchas — verify, don't assume
 
 - **`fixedExtension` / `hash` are not defaults in tsdown.** Removing them silently changes output to `.mjs` + hashed chunk names and breaks `exports`. Always build and inspect `dist/` before deleting any tsdown option that looks "default-ish."

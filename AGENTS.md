@@ -163,22 +163,24 @@ createLxnsClient({ personalAccessToken })
 
 根目录 scripts（工具装在 workspace 根，子包不重复装 oxlint/tsdown/typescript）：
 
-| 命令                             | 作用                                                                    |
-| -------------------------------- | ----------------------------------------------------------------------- |
-| `pnpm install`                   | 安装依赖                                                                |
-| `pnpm build`                     | 按 workspace 依赖拓扑构建所有库包                                       |
-| `pnpm typecheck`                 | **先 build 再**各包 `tsc --noEmit`                                      |
-| `pnpm test`                      | 各包 `test`（无 test 脚本的包会被 pnpm 跳过/报错视配置而定）            |
-| `pnpm test:web`                  | Vite 构建后用 headless Chrome 验证 solver/assets/database/draw Web 路径 |
-| `pnpm docs:dev` / `docs:build`   | VitePress + TypeDoc 自动 API 文档                                       |
-| `pnpm changeset`                 | 记录待发版变更（写 `.changeset/*.md`）                                  |
-| `pnpm ci:version` / `ci:publish` | 发版脚本（由 Release CI 调用；本地也可）                                |
-| `pnpm dev`                       | 各包 `tsdown --watch`                                                   |
-| `pnpm clean`                     | 清理各包构建产物                                                        |
-| `pnpm lint` / `lint:fix`         | 先 build，再运行 type-aware oxlint                                      |
-| `pnpm format` / `format:check`   | oxfmt                                                                   |
-| `pnpm check`                     | format:check + build + lint                                             |
-| `pnpm fix`                       | format + lint:fix                                                       |
+| 命令                             | 作用                                                                     |
+| -------------------------------- | ------------------------------------------------------------------------ |
+| `pnpm install`                   | 安装依赖                                                                 |
+| `pnpm build`                     | 按 workspace 依赖拓扑构建所有库包                                        |
+| `pnpm typecheck`                 | **先 build 再**各包 `tsc --noEmit`                                       |
+| `pnpm test`                      | 各包 `test`（无 test 脚本的包会被 pnpm 跳过/报错视配置而定）             |
+| `pnpm test:web`                  | 先 build，再用 headless Chrome 验证 solver/assets/database/draw Web 路径 |
+| `pnpm test:web:built`            | **CI 内部**：复用已构建 `dist` 跑 Web smoke，不重复 build                |
+| `pnpm docs:dev` / `docs:build`   | VitePress + TypeDoc 自动 API 文档（`docs:build` 会先 build）             |
+| `pnpm docs:build:built`          | **CI 内部**：复用已构建 `dist` 生成文档并跑 generated-api 测试           |
+| `pnpm changeset`                 | 记录待发版变更（写 `.changeset/*.md`）                                   |
+| `pnpm ci:version` / `ci:publish` | 发版脚本（由 Release CI 调用；本地也可）                                 |
+| `pnpm dev`                       | 各包 `tsdown --watch`                                                    |
+| `pnpm clean`                     | 清理各包构建产物                                                         |
+| `pnpm lint` / `lint:fix`         | 先 build，再运行 type-aware oxlint                                       |
+| `pnpm format` / `format:check`   | oxfmt                                                                    |
+| `pnpm check`                     | format:check + build + lint                                              |
+| `pnpm fix`                       | format + lint:fix                                                        |
 
 单包：
 
@@ -198,7 +200,9 @@ pnpm --filter @mai-kit/draw test:integration:lxns   # 真数据集成
 6. **不用 `paths` 指到源码**做跨包 typecheck；保持 build-first。
 7. `@types/node`：base `types: ["node"]`；**使用 Node API 的子包**在自身 `devDependencies` 声明。
 8. CI 先用 `actions/setup-node` 读取 `.node-version`，再由 `corepack enable pnpm` 根据根 `packageManager` 启用精确 pnpm 版本；不要再叠加自带旧 pnpm bootstrap 的 setup action。
-9. 细节与脚手架模板见 `.agents/skills/ts-library-monorepo/SKILL.md`。
+9. CI 的 `check` 只 build 一次；后续 typecheck/test/docs/Web smoke 必须复用该次 `dist`。本地易用命令保留 build-first，CI 走对应 `*:built` 入口。
+10. Release / Pages 只接受本仓库 `main` 的成功 `push` CI；特权 `workflow_run` 必须校验 event、branch、repository，并只消费已验证 SHA / artifact。
+11. 细节与脚手架模板见 `.agents/skills/ts-library-monorepo/SKILL.md`。
 
 ## 代码约定
 
@@ -447,13 +451,27 @@ export interface ProberPlayer { ... }
 
 - 工具：`@changesets/cli`；配置在 `.changeset/config.json`（`access: public`，忽略 `mai-kit-docs`）。
 - **不要**在 CI 里放 `NPM_TOKEN` / `NODE_AUTH_TOKEN` 用于 publish；走 **npm Trusted Publishing（OIDC）**。
-- Workflow：`.github/workflows/release.yml`
-  - 有未消费 changeset → 开/更新 Version PR
-  - 合并 Version PR 后 → `pnpm run ci:publish`（`build` + `changeset publish`）
-  - 权限：`id-token: write` + `contents: write` + `pull-requests: write`
+- `.github/workflows/ci.yml` 是唯一源码门禁：PR 与 `main` push 各验证一次，单次 build 后完成 format/lint、typecheck、单测、文档构建和真实浏览器 smoke；`main` 成功时上传已验证文档 artifact。
+- `.github/workflows/release.yml` 由成功的 `CI` `workflow_run` 触发：
+  - 仅接受本仓库 `main` 的 `push`，并 checkout `workflow_run.head_sha`；不得 checkout PR/fork 代码或消费其 artifact。
+  - Changesets 的 `branch` 显式设为 `main`，不依赖 `workflow_run` / detached HEAD 的默认 ref 推断。
+  - 有未消费 changeset → 开/更新 Version PR。
+  - `GITHUB_TOKEN` 创建/更新的 Version PR 检查可能处于“需要审批”；发布安全仍由合并后的 main CI 保证。若分支策略必须让 bot PR 自动跑，使用最小权限 GitHub App token，不要为此引入宽权限 PAT。
+  - 合并 Version PR 后再次通过 CI → `pnpm run ci:publish`（一次全新 `build` + `changeset publish`）。
+  - 不重复 format/lint/typecheck/test/docs/Web 门禁；权限为 `id-token: write` + `contents: write` + `pull-requests: write`。
+- `.github/workflows/deploy-docs.yml` 同样只在成功 main CI 后运行，直接下载该次 `docs-site` artifact 并部署；特权 workflow 中不 checkout 或执行仓库源码。
+- 发版 job 固定安装明确 npm 版本（当前 `npm@11.16.0`），不要使用会漂移的 `npm@latest`。
 - 各库包已设 `publishConfig.access: public`、`publishConfig.provenance: true`，以及 `repository`（须与真实 GitHub 仓一致）。
-- 每个 `@mai-kit/*` 在 npm 包设置里配置 Trusted Publisher：`Workflow filename = release.yml`（仅文件名）。
-- 单人维护：日常 `pnpm changeset` → push main → 合并 bot 的 Version PR 即可发版；也可本地 `changeset version` + `changeset publish`（本机需已登录 npm 且不适用 OIDC 时仍要 token）。
+- 每个 `@mai-kit/*` 只能配置一个 Trusted Publisher：仓库 `wsyzxjn/mai-kit`、`Workflow filename = release.yml`（仅文件名）、允许 `npm publish`。
+- 新包必须先手动发布首个版本，使包名在 npm registry 存在，再配置 OIDC：
+
+  ```bash
+  npm trust github @mai-kit/<package> --file release.yml --repo wsyzxjn/mai-kit --allow-publish --yes
+  npm trust list @mai-kit/<package> --json
+  ```
+
+- Trusted Publishing 验证成功后再把 npm 包的 Publishing access 收紧为禁止 token；不要在验证前先切断手动恢复路径。
+- 单人维护：日常 `pnpm changeset` → push main → CI → 合并 bot 的 Version PR → CI → 自动发版。失败时重跑原 workflow，不保留可绕过门禁的手动 Release 入口。
 
 ## 交付门禁（每次改动必过）
 
