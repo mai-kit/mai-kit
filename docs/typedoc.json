@@ -68,6 +68,7 @@
     "@mai-kit/analysis",
     "@mai-kit/database",
     "@mai-kit/draw",
+    "@mai-kit/judgement-solver",
     "@mai-kit/prober",
     "@mai-kit/shared",
     "@mai-kit/utils"
@@ -84,6 +85,7 @@
     "Rating 与评级",
     "DX 分",
     "判定计算",
+    "判定求解",
     "谱面索引",
     "领域类型",
     "HTTP 工具",

@@ -1,0 +1,41 @@
+{
+  "name": "@mai-kit/judgement-solver",
+  "version": "0.0.0",
+  "description": "根据谱面物量、已有判定和成绩约束计算判定预算。",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wsyzxjn/mai-kit.git",
+    "directory": "packages/judgement-solver"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "dev": "tsdown --watch",
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "test": "pnpm --filter @mai-kit/judgement-solver... run build && pnpm run test:unit",
+    "test:unit": "node --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "@mai-kit/shared": "workspace:*",
+    "@mai-kit/utils": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.1"
+  }
+}

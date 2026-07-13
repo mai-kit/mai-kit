@@ -41,7 +41,7 @@ pnpm add @mai-kit/utils
 - **只放纯函数**（输入 → 输出，无 I/O）
 - **不放**领域模型定义（见 `@mai-kit/shared` / prober）
 - **不放**查分 / 静态数据适配器
-- **不放**随机成绩、GLPK/WASM 反推等非确定性或重依赖能力
+- **不放**随机成绩、判定预算或重依赖反推；组合检查与剩余容错见 `@mai-kit/judgement-solver`
 - 海报场景下 **填 `dx_max` 是 `@mai-kit/draw` 的职责**（内部调本包），调用方不必自己拼 map
 
 ## 示例

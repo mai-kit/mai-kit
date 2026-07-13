@@ -2,6 +2,7 @@
   "packageOrder": [
     "@mai-kit/shared",
     "@mai-kit/utils",
+    "@mai-kit/judgement-solver",
     "@mai-kit/database",
     "@mai-kit/prober",
     "@mai-kit/assets",
@@ -56,6 +57,9 @@
         { "file": "/summary\\.ts$", "category": "Rating 构成" },
         { "category": "接口与模型" }
       ]
+    },
+    "judgement-solver": {
+      "rules": [{ "category": "判定求解" }]
     },
     "utils": {
       "rules": [

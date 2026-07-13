@@ -15,6 +15,12 @@ pnpm add @mai-kit/prober @mai-kit/database @mai-kit/draw
 pnpm add @mai-kit/utils
 ```
 
+需要检查混合判定或计算已有失误后的剩余容错时，安装：
+
+```bash
+pnpm add @mai-kit/judgement-solver
+```
+
 需要重算 Best50、排列升分候选或比较成绩快照时，安装：
 
 ```bash
