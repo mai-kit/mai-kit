@@ -3,7 +3,7 @@ import { MaimaiDatabaseError, type MaimaiDatabaseErrorInit } from "../../error";
 /**
  * Diving-Fish（水鱼）静态数据 / 素材适配专用错误（继承 {@link MaimaiDatabaseError}）。
  *
- * @see isDivingFishDatabaseError
+ * @see {@link isDivingFishDatabaseError}
  */
 export class DivingFishDatabaseError extends MaimaiDatabaseError {
   /**

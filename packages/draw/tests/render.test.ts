@@ -1,16 +1,9 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  Draw,
-  PlayerDraw,
-  BEST_HEIGHT,
-  BEST_WIDTH,
-  POSTER_HEIGHT,
-  POSTER_WIDTH,
-  type DrawLayout,
-} from "@mai-kit/draw";
+import { Draw, BEST_HEIGHT, BEST_WIDTH, POSTER_HEIGHT, POSTER_WIDTH } from "@mai-kit/draw";
 import type { PosterData } from "@mai-kit/draw";
+import type { Bests } from "@mai-kit/prober";
 
 /**
  * 固定成绩列表。不含任何外部图片，封面 / 头像由渲染器生成占位图，
@@ -29,10 +22,11 @@ const fixedData: PosterData = {
     oldSongs: 11002,
     averageAchievement: "100.578%",
     averageRating: 316.5,
+    maxRating: 320,
     maxDxScore: 3045,
     apPlus: 38,
     syncDxPlus: 26,
-    totalCharts: 2731,
+    totalCharts: 50,
   },
   // 固定 50 条，便于 best15/35/50 网格填满自检
   charts: Array.from({ length: 50 }, (_, i) => {
@@ -65,12 +59,6 @@ const fixedData: PosterData = {
       ...(seed.fs ? { fs: seed.fs } : {}),
     };
   }),
-  ratingDistribution: [
-    { label: "14+", value: 18, color: "#9e6df0" },
-    { label: "13+", value: 22, color: "#cf57ed" },
-    { label: "12+", value: 10, color: "#56dbff" },
-  ],
-  constantDistribution: [1, 3, 6, 9, 14, 12, 5],
   radar: [
     { label: "体力", value: 82, displayValue: 12 },
     { label: "技术", value: 75, displayValue: 11 },
@@ -80,7 +68,26 @@ const fixedData: PosterData = {
   ],
 };
 
-const renderer = new PlayerDraw(fixedData);
+const stubSource = {
+  async getAsset(): Promise<Uint8Array> {
+    throw new Error("no real asset in unit test");
+  },
+  async getChartTags() {
+    return [];
+  },
+};
+
+const draw = new Draw({ database: stubSource });
+const player = { name: fixedData.player.name, rating: fixedData.player.rating };
+/** 固定夹具：前 15 作新曲、后 35 作旧曲，供 best* 从 Bests 切割 */
+const fixtureBests: Bests = {
+  dx_total: fixedData.summary.newSongs,
+  standard_total: fixedData.summary.oldSongs,
+  dx: fixedData.charts.slice(0, 15),
+  standard: fixedData.charts.slice(15, 50),
+  dx_selections: [],
+  standard_selections: [],
+};
 
 /** PNG 文件头魔数 `\x89PNG\r\n\x1a\n`（用于断言渲染产物是合法 PNG，不是随机字节） */
 function isPng(bytes: Uint8Array): boolean {
@@ -102,8 +109,8 @@ function pngDimensions(png: Uint8Array): { width: number; height: number } {
   return { width: view.getUint32(16), height: view.getUint32(20) };
 }
 
-void test("render poster returns a valid PNG at poster size", async () => {
-  const png = await renderer.render("poster");
+void test("poster returns a valid PNG at poster size", async () => {
+  const png = await draw.poster(fixedData, { assetFallback: "placeholder" });
   assert.ok(png.length > 1000, "PNG should be non-trivial in size");
   assert.ok(isPng(png), "should be a valid PNG (magic header)");
   const { width, height } = pngDimensions(png);
@@ -116,21 +123,22 @@ void test("render poster returns a valid PNG at poster size", async () => {
   writeFileSync(out, png);
 });
 
-void test("render honors scale", async () => {
-  const png = await renderer.render("poster", { scale: 2 });
+void test("poster honors scale", async () => {
+  const png = await draw.poster(fixedData, { scale: 2, assetFallback: "placeholder" });
   const { width, height } = pngDimensions(png);
   assert.equal(width, POSTER_WIDTH * 2);
   assert.equal(height, POSTER_HEIGHT * 2);
-  assert.deepEqual(Draw.getSize("poster", 2), {
+  assert.deepEqual(Draw.getPosterSize(2), {
     width: POSTER_WIDTH * 2,
     height: POSTER_HEIGHT * 2,
   });
 });
 
-void test("renderSvg returns a non-trivial SVG with poster dimensions", async () => {
-  const svg = await renderer.renderSvg("poster", {
+void test("posterSvg returns a non-trivial SVG with poster dimensions", async () => {
+  const svg = await draw.posterSvg(fixedData, {
     footerLeft: "example.left",
     footerRight: "example.right",
+    assetFallback: "placeholder",
   });
   assert.equal(typeof svg, "string");
   assert.ok(svg.trimStart().startsWith("<svg"), "should start with <svg");
@@ -139,9 +147,15 @@ void test("renderSvg returns a non-trivial SVG with poster dimensions", async ()
   assert.ok(svg.includes(`height="${POSTER_HEIGHT}"`), "should declare poster height");
   assert.ok(svg.includes("<path"), "should render vector content");
   // satori 把文字描成 path，不能用 includes 查原文；用有无 footer 的差异断言
-  const withoutFooter = await renderer.renderSvg("poster");
-  const onlyLeft = await renderer.renderSvg("poster", { footerLeft: "example.left" });
-  const onlyRight = await renderer.renderSvg("poster", { footerRight: "example.right" });
+  const withoutFooter = await draw.posterSvg(fixedData, { assetFallback: "placeholder" });
+  const onlyLeft = await draw.posterSvg(fixedData, {
+    footerLeft: "example.left",
+    assetFallback: "placeholder",
+  });
+  const onlyRight = await draw.posterSvg(fixedData, {
+    footerRight: "example.right",
+    assetFallback: "placeholder",
+  });
   assert.notEqual(svg, withoutFooter, "should render footers when supplied");
   assert.notEqual(onlyLeft, withoutFooter, "should render footerLeft alone");
   assert.notEqual(onlyRight, withoutFooter, "should render footerRight alone");
@@ -149,19 +163,45 @@ void test("renderSvg returns a non-trivial SVG with poster dimensions", async ()
   assert.ok(!svg.includes("maimai.lxns.net"), "should not render a hard-coded footer");
 });
 
-const bestLayouts = ["best50", "best15", "best35"] as const satisfies readonly DrawLayout[];
-
-for (const layout of bestLayouts) {
-  void test(`render("${layout}") returns 16:9 PNG`, async () => {
-    const png = await renderer.render(layout);
-    assert.deepEqual(pngDimensions(png), {
-      width: BEST_WIDTH * 2,
-      height: BEST_HEIGHT * 2,
-    });
-    writeFileSync(new URL(`../output/${layout}.png`, import.meta.url), png);
-    assert.deepEqual(Draw.getSize(layout, 2), {
-      width: BEST_WIDTH * 2,
-      height: BEST_HEIGHT * 2,
-    });
+void test("best50 returns 16:9 PNG", async () => {
+  const png = await draw.best50(player, fixtureBests, { assetFallback: "placeholder" });
+  assert.deepEqual(pngDimensions(png), {
+    width: BEST_WIDTH * 2,
+    height: BEST_HEIGHT * 2,
   });
-}
+  writeFileSync(new URL("../output/best50.png", import.meta.url), png);
+  assert.deepEqual(Draw.getBestSize(2), {
+    width: BEST_WIDTH * 2,
+    height: BEST_HEIGHT * 2,
+  });
+});
+
+void test("best15 returns 16:9 PNG", async () => {
+  const png = await draw.best15(player, fixtureBests, { assetFallback: "placeholder" });
+  assert.deepEqual(pngDimensions(png), {
+    width: BEST_WIDTH * 2,
+    height: BEST_HEIGHT * 2,
+  });
+  writeFileSync(new URL("../output/best15.png", import.meta.url), png);
+});
+
+void test("best35 returns 16:9 PNG", async () => {
+  const png = await draw.best35(player, fixtureBests, { assetFallback: "placeholder" });
+  assert.deepEqual(pngDimensions(png), {
+    width: BEST_WIDTH * 2,
+    height: BEST_HEIGHT * 2,
+  });
+  writeFileSync(new URL("../output/best35.png", import.meta.url), png);
+});
+
+void test("best15 with fewer than 15 scores still renders", async () => {
+  const short: Bests = {
+    ...fixtureBests,
+    dx: fixtureBests.dx.slice(0, 3),
+  };
+  const png = await draw.best15(player, short, { scale: 1, assetFallback: "placeholder" });
+  assert.deepEqual(pngDimensions(png), {
+    width: BEST_WIDTH,
+    height: BEST_HEIGHT,
+  });
+});

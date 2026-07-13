@@ -21,6 +21,16 @@ export interface LxnsClientOptions {
   devAccessToken?: string;
   /** API 根地址；默认官方 LXNS */
   baseURL?: string;
+  /**
+   * 单次 HTTP 超时（毫秒）。省略则不限制。
+   * @see HttpResilienceOptions
+   */
+  timeoutMs?: number;
+  /**
+   * 网络 / 5xx 额外重试次数（默认 `0`）。
+   * @see HttpResilienceOptions
+   */
+  retries?: number;
 }
 
 /**
@@ -63,12 +73,15 @@ export type LxnsClient<O extends LxnsClientOptions> = ([O["personalAccessToken"]
 export function createLxnsClient<O extends LxnsClientOptions>(options: O): LxnsClient<O> {
   const baseURL = options.baseURL ?? LXNS_DEFAULT_BASE_URL;
 
+  const resilience = { timeoutMs: options.timeoutMs, retries: options.retries };
+
   const devHttp =
     options.devAccessToken !== undefined
       ? new LxnsHttp({
           baseURL,
           pathPrefix: "maimai/",
           headers: { Authorization: options.devAccessToken },
+          ...resilience,
         })
       : undefined;
 
@@ -78,6 +91,7 @@ export function createLxnsClient<O extends LxnsClientOptions>(options: O): LxnsC
           baseURL,
           pathPrefix: "user/maimai/",
           headers: { "X-User-Token": options.personalAccessToken },
+          ...resilience,
         })
       : undefined;
 

@@ -1,11 +1,16 @@
 import { DivingFishProberError } from "./error";
-import type { DivingFishPlayerPayload, DivingFishPlayerQuery } from "./types";
+import type {
+  DivingFishPlayerPayload,
+  DivingFishPlayerQuery,
+  DivingFishRatingRankEntry,
+} from "./types";
+import { fetchWithResilience, RequestCoalescer, type HttpResilienceOptions } from "@mai-kit/shared";
 
 /** Diving-Fish maimaidxprober API 默认根地址 */
 export const DIVING_FISH_DEFAULT_BASE_URL = "https://www.diving-fish.com/api/maimaidxprober/";
 
 /** {@link DivingFishHttp} 构造选项 */
-export interface DivingFishHttpOptions {
+export interface DivingFishHttpOptions extends HttpResilienceOptions {
   /** API 根，默认 {@link DIVING_FISH_DEFAULT_BASE_URL} */
   baseURL?: string;
   /** Import-Token（请求头 `Import-Token`，查自己完整成绩） */
@@ -24,14 +29,17 @@ export class DivingFishHttp {
   readonly baseURL: string;
   private readonly importToken?: string;
   private readonly developerToken?: string;
+  private readonly resilience: HttpResilienceOptions;
+  private readonly coalescer = new RequestCoalescer();
 
   /**
-   * @param options - 可选 baseURL 与鉴权 token
+   * @param options - 可选 baseURL、鉴权 token、timeout / retries
    */
   constructor(options: DivingFishHttpOptions = {}) {
     this.baseURL = options.baseURL ?? DIVING_FISH_DEFAULT_BASE_URL;
     this.importToken = options.importToken;
     this.developerToken = options.developerToken;
+    this.resilience = { timeoutMs: options.timeoutMs, retries: options.retries };
   }
 
   /**
@@ -106,6 +114,22 @@ export class DivingFishHttp {
   }
 
   /**
+   * 公开 Rating 排行：`GET /rating_ranking`。
+   *
+   * @returns 未开启隐私且 Rating 非零的玩家排行
+   * @throws {DivingFishProberError} 网络、HTTP 或响应结构错误
+   */
+  async ratingRanking(): Promise<DivingFishRatingRankEntry[]> {
+    const body = await this.requestJson<unknown>("rating_ranking");
+    if (!Array.isArray(body) || !body.every(isRatingRankEntry)) {
+      throw new DivingFishProberError({
+        message: "Diving-Fish rating_ranking: unexpected response structure",
+      });
+    }
+    return body;
+  }
+
+  /**
    * @param path - 相对 {@link baseURL} 的路径
    * @param init - method / headers / body / query
    * @returns 解析后的 JSON
@@ -127,53 +151,63 @@ export class DivingFishHttp {
       }
     }
 
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        method: init.method ?? "GET",
-        headers: {
-          Accept: "application/json",
-          ...(init.body !== undefined ? { "Content-Type": "application/json" } : {}),
-          ...init.headers,
-        },
-        body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
-      });
-    } catch (error) {
-      throw new DivingFishProberError({
-        message: `Diving-Fish network request failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-        cause: error,
-      });
-    }
+    const method = init.method ?? "GET";
+    const bodyText = init.body !== undefined ? JSON.stringify(init.body) : undefined;
+    const coalesceKey = `${method} ${url.href} ${bodyText ?? ""}`;
 
-    const text = await response.text();
-    let body: unknown;
-    if (text) {
+    return this.coalescer.run(coalesceKey, async () => {
+      let response: Response;
       try {
-        body = JSON.parse(text);
-      } catch {
-        body = undefined;
+        response = await fetchWithResilience(
+          url,
+          {
+            method,
+            headers: {
+              Accept: "application/json",
+              ...(bodyText !== undefined ? { "Content-Type": "application/json" } : {}),
+              ...init.headers,
+            },
+            body: bodyText,
+          },
+          this.resilience,
+        );
+      } catch (error) {
+        throw new DivingFishProberError({
+          message: `Diving-Fish network request failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          cause: error,
+        });
       }
-    }
 
-    if (!response.ok) {
-      const message =
-        typeof body === "object" &&
-        body !== null &&
-        "message" in body &&
-        typeof body.message === "string"
-          ? body.message
-          : `Diving-Fish HTTP ${response.status}`;
-      throw new DivingFishProberError({
-        code: response.status,
-        status: response.status,
-        message,
-      });
-    }
+      const text = await response.text();
+      let body: unknown;
+      if (text) {
+        try {
+          body = JSON.parse(text);
+        } catch {
+          body = undefined;
+        }
+      }
 
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    return body as T;
+      if (!response.ok) {
+        const message =
+          typeof body === "object" &&
+          body !== null &&
+          "message" in body &&
+          typeof body.message === "string"
+            ? body.message
+            : `Diving-Fish HTTP ${response.status}`;
+        throw new DivingFishProberError({
+          code: response.status,
+          status: response.status,
+          message,
+        });
+      }
+
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      return body as T;
+    });
   }
 }
 
@@ -186,4 +220,16 @@ function queryIdentity(query: DivingFishPlayerQuery): Record<string, string | nu
     return { username: query.username };
   }
   return { qq: query.qq };
+}
+
+function isRatingRankEntry(value: unknown): value is DivingFishRatingRankEntry {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "username" in value &&
+    typeof value.username === "string" &&
+    "ra" in value &&
+    typeof value.ra === "number" &&
+    Number.isFinite(value.ra)
+  );
 }

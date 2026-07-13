@@ -1,0 +1,88 @@
+{
+  "packageOrder": [
+    "@mai-kit/shared",
+    "@mai-kit/utils",
+    "@mai-kit/database",
+    "@mai-kit/prober",
+    "@mai-kit/assets",
+    "@mai-kit/analysis",
+    "@mai-kit/draw"
+  ],
+  "packages": {
+    "assets": {
+      "rules": [
+        { "name": "Font|font", "category": "字体" },
+        { "name": "Resvg|Wasm", "category": "栅格化" },
+        { "category": "徽章" }
+      ]
+    },
+    "shared": {
+      "rules": [
+        { "file": "/error\\.ts$", "category": "错误" },
+        { "file": "/http-resilience\\.ts$", "category": "HTTP 工具" },
+        { "category": "领域类型" }
+      ]
+    },
+    "database": {
+      "rules": [
+        { "file": "/adapters/lxns/", "category": "LXNS 适配" },
+        { "file": "/adapters/diving-fish/", "category": "Diving-Fish 适配" },
+        { "file": "/cache\\.ts$", "category": "缓存" },
+        { "file": "/error\\.ts$", "category": "错误" },
+        { "category": "接口与模型" }
+      ]
+    },
+    "prober": {
+      "rules": [
+        { "file": "/adapters/lxns/", "category": "LXNS 适配" },
+        { "file": "/adapters/diving-fish/", "category": "Diving-Fish 适配" },
+        { "file": "/error\\.ts$", "category": "错误" },
+        { "category": "接口与模型" }
+      ]
+    },
+    "draw": {
+      "rules": [
+        { "file": "/components/", "category": "布局与格式化" },
+        { "file": "/formatters\\.ts$", "category": "布局与格式化" },
+        { "file": "/error\\.ts$", "category": "错误" },
+        { "category": "绘制接口" }
+      ]
+    },
+    "analysis": {
+      "rules": [
+        { "file": "/bests\\.ts$", "category": "B50 分析" },
+        { "file": "/upgrades\\.ts$", "category": "升分分析" },
+        { "file": "/compare\\.ts$", "category": "快照对比" },
+        { "file": "/summary\\.ts$", "category": "Rating 构成" },
+        { "category": "接口与模型" }
+      ]
+    },
+    "utils": {
+      "rules": [
+        { "kind": "Module", "name": "^index$", "category": "常用公式" },
+        { "kind": "Module", "name": "^judgement$", "category": "判定计算" },
+        { "kind": "Module", "name": "^song$", "category": "谱面索引" },
+        {
+          "file": "/judgement\\.ts$",
+          "category": "判定计算"
+        },
+        {
+          "name": "Judgement|Penalty|NOTE_|BREAK_|NoteType|ChartNoteCounts|calculateAchievement|calculateChartDxScore|calculateDxScore|calculateMaxAchievementScores|dxMaxFromNoteCounts|normalizeBreak|normalizeChart|normalizeJudgement|normalizeNote|noteTotal",
+          "category": "判定计算"
+        },
+        {
+          "file": "/(achievement|rate|rating)\\.ts$",
+          "category": "Rating 与评级"
+        },
+        {
+          "name": "normalizeAchievement|minimumAchievementForRate|rateFromAchievement|calculateDxRating|dxRatingCoefficient|requiredLevelValue",
+          "category": "Rating 与评级"
+        },
+        { "file": "/dx-score\\.ts$", "category": "DX 分" },
+        { "name": "Dx|dx", "category": "DX 分" },
+        { "file": "/(level|score-key|song-maps|song)\\.ts$", "category": "谱面索引" },
+        { "name": "Level|Song|chartMap|scoreMap|parseLevel|findSong", "category": "谱面索引" }
+      ]
+    }
+  }
+}

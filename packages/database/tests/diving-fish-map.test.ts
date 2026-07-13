@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { divingFishCoverId, mapDivingFishMusicDataToSongList } from "@mai-kit/database";
+import { DivingFishMaimaiDatabase } from "@mai-kit/database";
+import {
+  divingFishCoverId,
+  mapDivingFishMusicDataToSongList,
+} from "../src/adapters/diving-fish/map-songs.ts";
 
 void test("divingFishCoverId pads and maps 10001-11000", () => {
   assert.equal(divingFishCoverId(38), "00038");
@@ -54,4 +58,46 @@ void test("mapDivingFishMusicDataToSongList merges SD/DX and notes", () => {
   assert.equal(dx.difficulties.dx[3]?.notes?.touch, 41);
   assert.equal(dx.difficulties.dx[3]?.notes?.total, 417 + 8 + 91 + 41 + 74);
   assert.equal(dx.difficulties.dx[3]?.note_designer, "test");
+});
+
+void test("DivingFishMaimaiDatabase validates chart stats and maps empty charts to null", async () => {
+  const originalFetch = globalThis.fetch;
+  let body: unknown = {
+    charts: {
+      11451: [
+        {},
+        {
+          cnt: 100,
+          diff: 1,
+          fit_diff: 7.4,
+          avg: 98.5,
+          avg_dx: 900,
+          std_dev: 2.1,
+          dist: [1, 2, 3],
+          fc_dist: [70, 20, 8, 2, 0],
+        },
+      ],
+    },
+    diff_data: {
+      1: {
+        achievements: 97.2,
+        dist: [0.1, 0.2, 0.7],
+        fc_dist: [0.7, 0.2, 0.08, 0.02, 0],
+      },
+    },
+  };
+  globalThis.fetch = async () => new Response(JSON.stringify(body));
+
+  try {
+    const database = new DivingFishMaimaiDatabase({ baseURL: "https://example.test/api/" });
+    const result = await database.getChartStats();
+    assert.equal(result.charts["11451"]?.[0], null);
+    assert.equal(result.charts["11451"]?.[1]?.fit_diff, 7.4);
+    assert.equal(result.diff_data["1"]?.achievements, 97.2);
+
+    body = { charts: [], diff_data: {} };
+    await assert.rejects(database.getChartStats(), /unexpected response structure/u);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

@@ -3,7 +3,7 @@ import { MaimaiDatabaseError, type MaimaiDatabaseErrorInit } from "../../error";
 /**
  * LXNS 静态数据 / 素材适配专用错误（继承 {@link MaimaiDatabaseError}）。
  *
- * @see isLxnsDatabaseError
+ * @see {@link isLxnsDatabaseError}
  */
 export class LxnsDatabaseError extends MaimaiDatabaseError {
   /**

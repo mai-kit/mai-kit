@@ -6,7 +6,7 @@ import { ProberError, type ProberErrorInit } from "../../error";
  * 调用方可用 {@link isDivingFishProberError} 区分数据源；
  * 也可用 {@link isProberError} / `isMaiKitError` 做更宽捕获。
  *
- * @see isDivingFishProberError
+ * @see {@link isDivingFishProberError}
  */
 export class DivingFishProberError extends ProberError {
   /**

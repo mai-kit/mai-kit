@@ -5,7 +5,7 @@ import {
   getRateBadge,
 } from "@mai-kit/assets";
 import { placeholderCover } from "../assets";
-import type { PosterData, ScoreChart } from "../types";
+import type { PlayerProfile, ScoreChart } from "../types";
 import {
   formatAchievement,
   formatChartRating,
@@ -28,7 +28,7 @@ import {
 import { fitText } from "./widgets";
 
 /**
- * 横屏 Best 板页种，与 `PlayerDraw.render("best*")` 的三种布局对应。
+ * 横屏 Best 板页种，对应 {@link Draw.best15} / {@link Draw.best35} / {@link Draw.best50}。
  *
  * @remarks 稳定性：高级布局 API，可能随视觉设计调整。
  * @beta
@@ -171,44 +171,50 @@ function clamp(n: number, min: number, max: number): number {
 function pageMeta(page: BestPage): {
   title: string;
   startIndex: number;
-  slice: [number, number];
   accent: string;
 } {
   if (page === "best15") {
-    return { title: "新曲 B15", startIndex: 1, slice: [0, 15], accent: "#8b52df" };
+    return { title: "新曲 B15", startIndex: 1, accent: "#8b52df" };
   }
   if (page === "best35") {
-    return { title: "旧曲 B35", startIndex: 16, slice: [15, 50], accent: "#5542aa" };
+    return { title: "旧曲 B35", startIndex: 16, accent: "#5542aa" };
   }
-  return { title: "B50 全曲", startIndex: 1, slice: [0, 50], accent: "#7048cf" };
+  return { title: "B50 全曲", startIndex: 1, accent: "#7048cf" };
 }
 
 /**
  * Best 板 JSX 布局，供直接组装 satori 树的高级用法。
  *
- * 常规出图请使用 {@link Draw.withPlayer} → `PlayerDraw.render("best*")`。
+ * 常规出图请使用 {@link Draw.best15} / {@link Draw.best35} / {@link Draw.best50}。
  *
- * @param props - 完整海报数据、页种与可选页脚
+ * @param props - 玩家署名、该页成绩列表、页种与可选页脚
  * @returns satori 可渲染的 JSX 元素
  *
  * @example
  * ```ts
  * import { createElement } from "react";
  *
- * const element = createElement(BestBoard, { data, page: "best15" });
+ * const element = createElement(BestBoard, {
+ *   player,
+ *   charts: bests.dx.slice(0, 15), // 常规请用 Draw.best15(player, bests)
+ *   page: "best15",
+ * });
  * ```
  *
- * @remarks 稳定性：高级布局 API。常规出图优先使用 {@link PlayerDraw.render}。
+ * @remarks 稳定性：高级布局 API。常规出图优先使用 {@link Draw} 上对应方法。
  * @beta
  */
 export function BestBoard({
-  data,
+  player,
+  charts: inputCharts,
   page,
   footerLeft,
   footerRight,
 }: {
-  /** 完整海报数据 */
-  data: PosterData;
+  /** 页头署名（昵称 / Rating） */
+  player: PlayerProfile;
+  /** 本页成绩；内部按页种截断到 15 / 35 / 50 */
+  charts: readonly ScoreChart[];
   /** 要渲染的 Best 板页种 */
   page: BestPage;
   /** 左侧页脚文案 */
@@ -218,7 +224,7 @@ export function BestBoard({
 }) {
   const layout = bestBoardLayout(page);
   const meta = pageMeta(page);
-  const charts = data.charts.slice(meta.slice[0], meta.slice[1]);
+  const charts = inputCharts.slice(0, layout.count);
 
   return (
     <div style={styles.root}>
@@ -229,8 +235,8 @@ export function BestBoard({
           <span style={{ ...styles.headerRule, backgroundColor: meta.accent }} />
         </div>
         <div style={styles.headerRight}>
-          <span style={styles.playerName}>{data.player.name}</span>
-          <span style={styles.rating}>RATING {data.player.rating}</span>
+          <span style={styles.playerName}>{player.name}</span>
+          <span style={styles.rating}>RATING {player.rating}</span>
         </div>
       </div>
 

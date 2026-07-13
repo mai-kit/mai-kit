@@ -17,7 +17,7 @@ pnpm add @mai-kit/prober
 
 ```ts
 const [profile, bests] = await Promise.all([player.getProfile(), player.getBests()]);
-// 交给 @mai-kit/draw 的 Draw.withPlayer(profile, bests)
+// 交给 @mai-kit/draw 的 Draw.poster(profile, bests)
 ```
 
 全量成绩、最近成绩、走势、热力图与单谱面历史拆成独立能力接口。客户端会按 token 和
@@ -78,6 +78,9 @@ await me.getScores();
 // Developer-Token：按用户名 / QQ 拉完整成绩
 const dev = createDivingFishClient({ developerToken: "<dev-token>" });
 const other = await dev.getPlayer({ qq: 123456 });
+
+// 公开 Rating 排行（无需 token）
+const ranking = await client.getRatingRanking();
 ```
 
 联调可用 `getTestPlayer()`（官方固定测试数据）。  
@@ -85,19 +88,49 @@ const other = await dev.getPlayer({ qq: 123456 });
 返回类型不包含这些方法。公开 B50 查询也不暴露 `getScores`；Import-Token、Developer-Token
 和 `getTestPlayer()` 返回 `ScoresProberPlayer`，可以查询并筛选完整 records。
 
+`getRatingRanking()` 是水鱼适配专属的站点排行能力，返回未开启隐私且 Rating 非零的
+用户；它不属于绑定某一玩家的 `ProberPlayer`。
+
+适配器保持只读：水鱼的账号资料修改、成绩导入 / 删除等写入接口不在本包范围内。
+
+水鱼 HTTP 字段到通用 `Score` / `Bests` 的映射函数为**适配内部实现**，不从包根导出；
+请使用 `createDivingFishClient` 得到 `ProberPlayer` / `ScoresProberPlayer`。
+
+## HTTP 超时 / 重试（可选）
+
+默认不超时、不重试。需要时在客户端构造参数中显式开启；相同 URL（及 POST body）的并发请求会合并为一次网络调用：
+
+```ts
+const client = createLxnsClient({
+  personalAccessToken: token,
+  timeoutMs: 10_000,
+  retries: 2, // 网络失败或 5xx 额外重试 2 次
+});
+
+const df = createDivingFishClient({ timeoutMs: 8_000, retries: 1 });
+```
+
 ## 错误处理
 
 - 包级基类：`ProberError`（继承 `MaiKitError`）
-- 适配子类：`LxnsProberError` / `DivingFishProberError`（`isProberError` 对子类同样为 true）
+- 包级未实现：`ProberNotImplementedError`（适配无法实现某查询能力时使用；优先仍用类型收窄避免挂上不存在的方法）
+- 适配子类：`LxnsProberError` / `DivingFishProberError`（鉴权 / HTTP / 业务失败）
 
 ```ts
-import { isProberError, isLxnsProberError, isDivingFishProberError } from "@mai-kit/prober";
+import {
+  isProberError,
+  isProberNotImplementedError,
+  isLxnsProberError,
+  isDivingFishProberError,
+} from "@mai-kit/prober";
 import { isMaiKitError } from "@mai-kit/shared";
 
 try {
   await player.getProfile();
 } catch (e) {
-  if (isDivingFishProberError(e)) {
+  if (isProberNotImplementedError(e)) {
+    /* 当前源无此能力：e.method / e.adapter */
+  } else if (isDivingFishProberError(e)) {
     /* 仅水鱼适配 */
   } else if (isLxnsProberError(e)) {
     /* 仅 LXNS 适配 */
@@ -114,8 +147,7 @@ try {
 
 ```ts
 const [profile, bests] = await Promise.all([player.getProfile(), player.getBests()]);
-const playerDraw = await new Draw({ database }).withPlayer(profile, bests);
-const png = await playerDraw.render("poster");
+const png = await new Draw({ database }).poster(profile, bests);
 ```
 
 `player` 和 `database` 可以分别使用任意 prober、database 适配。

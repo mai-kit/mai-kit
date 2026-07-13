@@ -7,7 +7,12 @@ import { BarChart, DonutChart, RadarChart } from "./charts";
 import { posterStyles as styles } from "./poster.styles";
 import { nextSongSectionTop, SongSection } from "./song-card";
 import { TopCard } from "./song-card";
-import { Panel, SummaryLine, Metric, fallbackPersonalMetrics } from "./widgets";
+import {
+  constantDistributionFromCharts,
+  ratingDistributionFromCharts,
+  resolvePersonalMetrics,
+} from "../poster-derived";
+import { Panel, SummaryLine, Metric } from "./widgets";
 
 /**
  * 海报的逻辑画布尺寸，供高级自定义布局使用。
@@ -19,7 +24,7 @@ export { POSTER_HEIGHT, POSTER_WIDTH } from "./theme";
 /**
  * 海报 JSX 布局，供直接组装 satori 树的高级用法。
  *
- * 常规出图请使用 {@link Draw.withPlayer} → `PlayerDraw.render("poster")`。
+ * 常规出图请使用 {@link Draw.poster}。
  *
  * @param props - 完整海报数据与可选页脚
  * @returns satori 可渲染的 JSX 元素
@@ -31,7 +36,7 @@ export { POSTER_HEIGHT, POSTER_WIDTH } from "./theme";
  * const element = createElement(B50Poster, { data, footerLeft: "my-app" });
  * ```
  *
- * @remarks 稳定性：高级布局 API。常规出图优先使用 {@link PlayerDraw.render}。
+ * @remarks 稳定性：高级布局 API。常规出图优先使用 {@link Draw.poster}。
  * @beta
  */
 export function B50Poster({
@@ -53,7 +58,9 @@ export function B50Poster({
   const b35Top = nextSongSectionTop(b15Top, b15.length);
   const avatar = data.player.avatarDataUri ?? placeholderAvatar(data.player.name);
   const generatedAt = formatGeneratedAt(data.player.upload_time);
-  const personalMetrics = data.personalMetrics ?? fallbackPersonalMetrics(data);
+  const personalMetrics = resolvePersonalMetrics(data);
+  const ratingDistribution = ratingDistributionFromCharts(charts);
+  const constantDistribution = constantDistributionFromCharts(charts);
   const showFooter = Boolean(footerLeft || footerRight);
 
   return (
@@ -114,15 +121,15 @@ export function B50Poster({
             <div style={styles.statCell}>
               <div style={styles.panelTitleSmall}>RATING 分布</div>
               <div style={styles.donutRow}>
-                <DonutChart items={data.ratingDistribution} />
+                <DonutChart items={ratingDistribution} />
                 <div style={styles.legend}>
-                  {data.ratingDistribution.map((item) => (
+                  {ratingDistribution.map((item) => (
                     <div key={item.label} style={styles.legendRow}>
                       <div style={{ ...styles.legendDot, backgroundColor: item.color }} />
                       <div style={styles.legendLabel}>{item.label}</div>
                       <div style={styles.legendValue}>{item.value}</div>
                       <div style={styles.legendPercent}>
-                        ({Math.round((item.value / 50) * 100)}%)
+                        ({Math.round((item.value / Math.max(charts.length, 1)) * 100)}%)
                       </div>
                     </div>
                   ))}
@@ -131,7 +138,7 @@ export function B50Poster({
             </div>
             <div style={styles.statCellRight}>
               <div style={styles.panelTitleSmall}>定数分布 (B50)</div>
-              <BarChart values={data.constantDistribution} />
+              <BarChart values={constantDistribution} />
             </div>
           </div>
         </Panel>

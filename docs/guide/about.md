@@ -28,9 +28,12 @@ mai-kit 是面向 **舞萌 DX（maimai DX）** 玩家与开发者的 TypeScript 
 
 - 公开 B50 查询（受对方隐私设置影响）
 - Import-Token / Developer-Token 下的完整成绩
-- 曲目表 `music_data`、封面 `covers`
+- 公开 Rating 排行
+- 曲目表 `music_data`、谱面统计 `chart_stats`、封面 `covers`
 
-请遵守水鱼的使用条款与频率限制；令牌请自行保管。
+这些能力均为只读查询。账号资料、成绩导入 / 删除和水鱼站内功能不属于 mai-kit 的适配范围。
+别名、收藏品及封面之外的游戏素材没有对等的水鱼公开接口。请遵守水鱼的使用条款与频率
+限制；令牌请自行保管。
 
 ### DXRating 社区谱面标签
 
@@ -53,6 +56,7 @@ mai-kit 是面向 **舞萌 DX（maimai DX）** 玩家与开发者的 TypeScript 
 | 字体     | [Noto Sans SC](https://fonts.google.com/noto/specimen/Noto+Sans+SC)                           | 海报默认中文（及 CJK）正文                    |
 | 字体     | [Comfortaa](https://fonts.google.com/specimen/Comfortaa)                                      | 海报默认拉丁装饰字体                          |
 | 界面素材 | 评级、FC/AP、段位等徽章图                                                                     | 海报上的标识展示（随 `@mai-kit/assets` 提供） |
+| 设计参考 | [maidraw](https://github.com/saltcute/maidraw)（saltcute）                                    | draw 部分素材的设计与呈现方式参考             |
 
 字体通常遵循各发行方的开源字体许可（如 SIL Open Font License）；具体以字体文件或发行页为准。  
 徽章等界面素材用于成绩展示；若你二次分发含素材的产物，请自行确认合规与合理使用边界。
@@ -67,6 +71,7 @@ mai-kit 是面向 **舞萌 DX（maimai DX）** 玩家与开发者的 TypeScript 
 - **Diving-Fish（水鱼）** — 成绩与曲目 / 封面适配之一
 - **DXRating 社区** — 谱面标签等社区数据，丰富了海报中的谱面特征展示
 - **satori / resvg 及相关维护者** — 矢量与栅格渲染基础
+- **maidraw 及其作者与维护者** — draw 部分素材设计与呈现方式的参考
 - **Noto、Comfortaa 字体作者与 Google Fonts 等发行方** — 海报可用的中西文显示
 - **舞萌 DX 玩家与开发者社区** — 公式、约定与使用反馈
 - **所有为本仓库提交问题、建议与代码的贡献者**

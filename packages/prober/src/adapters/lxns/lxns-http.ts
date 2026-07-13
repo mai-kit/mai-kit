@@ -1,5 +1,6 @@
 import { LxnsProberError } from "./error";
 import type { ScoreQuery } from "../../models";
+import { fetchWithResilience, RequestCoalescer, type HttpResilienceOptions } from "@mai-kit/shared";
 
 /** LXNS API 默认根地址 */
 export const LXNS_DEFAULT_BASE_URL = "https://maimai.lxns.net/api/v0/";
@@ -25,7 +26,7 @@ function isLxnsEnvelope(body: unknown): body is LxnsEnvelope<unknown> {
   return typeof body.success === "boolean";
 }
 
-export interface LxnsHttpOptions {
+export interface LxnsHttpOptions extends HttpResilienceOptions {
   baseURL: string;
   /** 路径前缀，dev 为 "maimai/"，personal 为 "user/maimai/" */
   pathPrefix: string;
@@ -38,8 +39,12 @@ export interface LxnsHttpOptions {
  *
  * dev/personal 接口的响应约定：成功返回 `{ success: true, code, data }`（需拆出 data）；
  * 错误返回 `{ success: false, code, message }`。成功路径拆 data，错误路径抛 {@link LxnsProberError}。
+ *
+ * 可选 `timeoutMs` / `retries`：默认关闭；相同 GET URL 的并发请求会合并为一次网络调用。
  */
 export class LxnsHttp {
+  private readonly coalescer = new RequestCoalescer();
+
   constructor(private readonly options: LxnsHttpOptions) {}
 
   async get<T>(path: string, params?: QueryParams): Promise<T> {
@@ -52,11 +57,20 @@ export class LxnsHttp {
       }
     }
 
+    const key = `GET ${url.href}`;
+    return this.coalescer.run(key, async () => this.getOnce<T>(url));
+  }
+
+  private async getOnce<T>(url: URL): Promise<T> {
     let response: Response;
     try {
-      response = await fetch(url, {
-        headers: { Accept: "application/json", ...this.options.headers },
-      });
+      response = await fetchWithResilience(
+        url,
+        {
+          headers: { Accept: "application/json", ...this.options.headers },
+        },
+        { timeoutMs: this.options.timeoutMs, retries: this.options.retries },
+      );
     } catch (error) {
       throw new LxnsProberError({
         message: `Network request failed: ${
@@ -78,7 +92,6 @@ export class LxnsHttp {
 
     if (isLxnsEnvelope(body)) {
       if (body.success) {
-        // dev/personal 成功：拆出 data
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         return body.data as T;
       }

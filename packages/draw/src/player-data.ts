@@ -1,26 +1,20 @@
 import type { Bests, PlayerProfile, Score } from "@mai-kit/prober";
-import { normalizeAchievement, parseLevelString } from "@mai-kit/utils";
 import { buildSongDxMaxMap, buildSongLevelMap, scoreMapKey } from "@mai-kit/utils/song";
 import { DrawError } from "./error";
-import type {
-  MetricItem,
-  PosterData,
-  PosterDataSource,
-  RadarItem,
-  RatingDistributionItem,
-} from "./types";
-
-const RATING_COLORS = ["#ec654e", "#f2a34b", "#438dcb", "#326fb4"];
+import { summarizeCharts } from "./poster-derived";
+import type { PosterData, PosterDataSource, RadarItem, ScoreChart } from "./types";
 
 /**
  * 将 prober 档案 + Best50 与标签 / 曲目源聚合成 {@link PosterData}。
  *
- * 由 {@link Draw.withPlayer} 调用；一般用户无需直接使用。
+ * 由 {@link Draw.poster} 调用；也可经包根 `buildPosterData` 单独使用。
  *
  * - `source.getChartTags`：谱面倾向雷达（必选）
  * - `source.getSongList`（可选）：自动填 `dx_max` / `level_value`
+ * - **只写入权威字段**：`player` / `charts` / `summary` / `radar`
+ *   （评级/定数分布与个人数据网格在渲染时从 charts/summary 派生，不双写）
  *
- * 封面 / 头像在 {@link PlayerDraw} 渲染阶段解析。
+ * 封面 / 头像在渲染阶段解析。
  *
  * @throws {DrawError} 可用配置类标签少于 3 个等
  */
@@ -35,48 +29,26 @@ export async function buildPlayerData(
 
   const { songDxMaxMap, songLevelMap } = await loadSongMaps(source);
 
-  const charts = b50.map((score) => {
+  const charts: ScoreChart[] = b50.map((score) => {
     const key = scoreMapKey(score);
     const dx_max = songDxMaxMap?.get(key);
     const level_value = songLevelMap?.get(key);
-    const chart = Object.assign({}, score);
+    const chart = Object.assign({}, score) as ScoreChart;
     if (dx_max != null) Object.assign(chart, { dx_max });
     if (level_value != null) Object.assign(chart, { level_value });
     return chart;
   });
 
-  const achievementAverage = average(b50.map((score) => normalizeAchievement(score.achievements)));
-  const ratingAverage = average(b50.map(ratingOf));
-  const maxRating = Math.max(...b50.map(ratingOf), 0);
-  const maxDxScore = Math.max(...b50.map((score) => score.dx_score ?? 0), 0);
-  const newTotal = bests.dx_total || sumRating(newScores);
-  const oldTotal = bests.standard_total || sumRating(oldScores);
   const radar = await buildTagRadar(b50, source);
 
   return {
     player,
     charts,
-    summary: {
-      b50: sumRating(b50) || newTotal + oldTotal,
-      newSongs: newTotal,
-      oldSongs: oldTotal,
-      averageAchievement: `${achievementAverage.toFixed(3)}%`,
-      averageRating: round1(ratingAverage),
-      maxDxScore,
-      apPlus: b50.filter((score) => score.fc === "app").length,
-      syncDxPlus: b50.filter((score) => score.fs === "fsdp").length,
-      totalCharts: b50.length,
-    },
-    ratingDistribution: buildRatingDistribution(b50),
-    constantDistribution: buildConstantDistribution(b50, songLevelMap),
+    summary: summarizeCharts(charts, {
+      newSongs: bests.dx_total,
+      oldSongs: bests.standard_total,
+    }),
     radar,
-    personalMetrics: buildPersonalMetrics(
-      b50,
-      achievementAverage,
-      ratingAverage,
-      maxRating,
-      maxDxScore,
-    ),
   };
 }
 
@@ -92,36 +64,6 @@ async function loadSongMaps(source: PosterDataSource): Promise<{
     songDxMaxMap: buildSongDxMaxMap(songs),
     songLevelMap: buildSongLevelMap(songs),
   };
-}
-
-function buildRatingDistribution(scores: Score[]): RatingDistributionItem[] {
-  const groups = [
-    { label: "SSS+", match: (score: Score) => score.rate === "sssp" },
-    { label: "SSS", match: (score: Score) => score.rate === "sss" },
-    { label: "SS+", match: (score: Score) => score.rate === "ssp" },
-    {
-      label: "SS及以下",
-      match: (score: Score) => !["sssp", "sss", "ssp"].includes(score.rate ?? ""),
-    },
-  ];
-  return groups.map((group, index) => ({
-    label: group.label,
-    value: scores.filter(group.match).length,
-    color: RATING_COLORS[index],
-  }));
-}
-
-function buildConstantDistribution(scores: Score[], songLevelMap?: Map<string, number>): number[] {
-  const buckets = Array.from({ length: 16 }, () => 0);
-  for (const score of scores) {
-    const levelValue = songLevelMap?.get(scoreMapKey(score)) ?? parseLevelString(score.level);
-    if (levelValue === undefined) {
-      throw new DrawError(`Score ${score.id} is missing a parseable level`);
-    }
-    const index = clamp(Math.floor((levelValue - 13.5) / 0.125), 0, buckets.length - 1);
-    buckets[index] += 1;
-  }
-  return buckets;
 }
 
 async function buildTagRadar(scores: Score[], tagSource: PosterDataSource): Promise<RadarItem[]> {
@@ -151,41 +93,4 @@ async function buildTagRadar(scores: Score[], tagSource: PosterDataSource): Prom
     value: Math.round((tag.count / max) * 100),
     displayValue: tag.count,
   }));
-}
-
-function buildPersonalMetrics(
-  scores: Score[],
-  achievementAverage: number,
-  ratingAverage: number,
-  maxRating: number,
-  maxDxScore: number,
-): MetricItem[] {
-  return [
-    { label: "平均达成率", value: `${achievementAverage.toFixed(3)}%` },
-    { label: "平均 Rating", value: round1(ratingAverage) },
-    { label: "最高 Rating", value: maxRating },
-    { label: "最高 DX 分", value: maxDxScore },
-    { label: "FC/AP 数", value: scores.filter((score) => score.fc).length },
-    { label: "FS 数", value: scores.filter((score) => score.fs).length },
-  ];
-}
-
-function sumRating(scores: Score[]): number {
-  return scores.reduce((sum, score) => sum + ratingOf(score), 0);
-}
-
-function ratingOf(score: Score): number {
-  return Math.floor(score.dx_rating ?? 0);
-}
-
-function average(values: number[]): number {
-  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
-}
-
-function round1(value: number): number {
-  return Math.round(value * 10) / 10;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
 }

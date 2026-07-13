@@ -6,9 +6,8 @@ import {
   mapDivingFishProfile,
   mapDivingFishRecord,
   mapDivingFishSongType,
-} from "@mai-kit/prober";
-
-type DivingFishRecord = Parameters<typeof mapDivingFishRecord>[0];
+} from "../src/adapters/diving-fish/mappers.ts";
+import type { DivingFishRecord } from "../src/adapters/diving-fish/types.ts";
 
 const sample: DivingFishRecord = {
   achievements: 100.5492,

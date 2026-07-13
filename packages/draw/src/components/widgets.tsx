@@ -1,5 +1,4 @@
 import type { CSSProperties } from "react";
-import type { MetricItem, PosterData } from "../types";
 
 const styles = {
   panel: {
@@ -92,17 +91,6 @@ export function Metric({ label, value }: { label: string; value: string | number
       <div style={styles.metricValue}>{value}</div>
     </div>
   );
-}
-
-export function fallbackPersonalMetrics(data: PosterData): MetricItem[] {
-  return [
-    { label: "平均达成率", value: data.summary.averageAchievement },
-    { label: "平均 Rating", value: data.summary.averageRating },
-    { label: "最高 DX 分数", value: data.summary.maxDxScore },
-    { label: "AP+ 数量", value: data.summary.apPlus },
-    { label: "SYNC DX+ 数量", value: data.summary.syncDxPlus },
-    { label: "全曲数", value: data.summary.totalCharts },
-  ];
 }
 
 /**

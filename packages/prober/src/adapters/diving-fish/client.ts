@@ -1,7 +1,7 @@
 import type { ProberPlayer, ScoresProberPlayer } from "../../prober-player";
 import { DivingFishHttp } from "./http";
 import { DivingFishPlayer, DivingFishScoresPlayer } from "./player";
-import type { DivingFishPlayerQuery } from "./types";
+import type { DivingFishPlayerQuery, DivingFishRatingRankEntry } from "./types";
 
 /**
  * Diving-Fish 适配客户端选项。
@@ -26,12 +26,17 @@ export interface DivingFishClientOptions {
   developerToken?: string;
   /** API 根地址；默认官方 `maimaidxprober` */
   baseURL?: string;
+  /** 单次 HTTP 超时（毫秒）；省略不限制 */
+  timeoutMs?: number;
+  /** 网络 / 5xx 额外重试次数（默认 `0`） */
+  retries?: number;
 }
 
 /**
  * Diving-Fish 适配客户端类型。
  *
  * - 始终具备 `getPlayer` / `getTestPlayer`
+ * - 始终具备 `getRatingRanking`（水鱼公开排行）
  * - 构造时传入 `importToken` 时额外有 `me()`
  *
  * @typeParam O - 构造选项，用于条件暴露 `me`
@@ -58,6 +63,14 @@ export type DivingFishClient<O extends DivingFishClientOptions = DivingFishClien
    * @throws {DivingFishProberError} 网络错误
    */
   getTestPlayer(): Promise<ScoresProberPlayer>;
+  /**
+   * 获取水鱼公开 Rating 排行。
+   *
+   * 这是水鱼适配专属能力，不属于玩家对象。
+   *
+   * @returns 未开启隐私且 Rating 非零的玩家排行
+   */
+  getRatingRanking(): Promise<DivingFishRatingRankEntry[]>;
 } & ([O["importToken"]] extends [NonNullable<O["importToken"]>]
   ? {
       /**
@@ -107,6 +120,7 @@ export function createDivingFishClient<O extends DivingFishClientOptions>(
   const client: {
     getPlayer(query: DivingFishPlayerQuery): Promise<ProberPlayer>;
     getTestPlayer(): Promise<ScoresProberPlayer>;
+    getRatingRanking(): Promise<DivingFishRatingRankEntry[]>;
     me?: () => ScoresProberPlayer;
   } = {
     async getPlayer(query) {
@@ -120,6 +134,9 @@ export function createDivingFishClient<O extends DivingFishClientOptions>(
     async getTestPlayer() {
       const payload = await http.testData();
       return DivingFishScoresPlayer.fromRecordsPayload(http, payload);
+    },
+    async getRatingRanking() {
+      return http.ratingRanking();
     },
   };
 

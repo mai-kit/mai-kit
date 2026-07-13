@@ -2,7 +2,7 @@
  * 从曲目列表构建「谱面 key → 数值」索引（纯数据变换，无网络）。
  *
  * 结构与 `@mai-kit/database` 的 `Song` 兼容，但不依赖该包。
- * `@mai-kit/draw` 的 `withPlayer` 在拿到 `getSongList` 结果后会调用这些函数。
+ * `@mai-kit/draw` 在出图时拿到 `getSongList` 结果后会调用这些函数。
  */
 
 import { dxMaxFromNoteTotal } from "./dx-score";

@@ -40,7 +40,9 @@ void test("public signatures do not reference undocumented helper types", async 
   const database = await readApi("@mai-kit/database/index.md");
 
   assert.doesNotMatch(api, /\bIfDefined\b/u);
-  assert.match(database, /DivingFishMusicEntry/u);
+  // 水鱼公开适配面：统计模型保留；原始 music_data 条目与 map 函数已收出包根
+  assert.match(database, /DivingFishChartStats/u);
+  assert.doesNotMatch(database, /DivingFishMusicEntry/u);
 });
 
 void test("package and base error documentation are attached to the intended reflections", async () => {
@@ -59,6 +61,19 @@ void test("advanced draw exports remain discoverable", async () => {
   assert.match(draw, /B50Poster/u);
   assert.match(draw, /BestBoardLayout/u);
   assert.match(draw, /formatDxScore/u);
+});
+
+void test("docs omit private class members and unexported adapter helpers", async () => {
+  const draw = await readApi("@mai-kit/draw/classes/Draw.md");
+  assert.doesNotMatch(draw, /resolvePosterInput|renderPosterSvg|renderBestSvg|enrichChart/u);
+
+  const pages = await readAllGeneratedMarkdown();
+  const api = pages.join("\n");
+  // 水鱼 map / 标签快照 / coverId 已收出包根公开面，不应再出现在 API 文档
+  assert.doesNotMatch(api, /mapDivingFishRecord|mapDivingFishBestsFromCharts|divingFishCoverId/u);
+  assert.doesNotMatch(api, /getLocalChartTags|getChartTagSnapshot|DXRATING_TAGS_SOURCE_URL/u);
+  // 已扁平化：不应再导出中间绘制句柄
+  assert.doesNotMatch(api, /PlayerDraw|ChartDraw|UpgradesDraw|withPlayer|withChart|withUpgrades/u);
 });
 
 void test("public API tables do not contain empty descriptions", async () => {
@@ -82,6 +97,20 @@ void test("sidebar uses semantic API categories", async () => {
   assert.match(sidebarText, /"text": "升分分析"/u);
   assert.match(sidebarText, /"text": "快照对比"/u);
 
+  // 依赖心智序：shared → utils → database → prober → assets → analysis → draw
+  assert.deepEqual(
+    sidebar.map((item) => item.text),
+    [
+      "@mai-kit/shared",
+      "@mai-kit/utils",
+      "@mai-kit/database",
+      "@mai-kit/prober",
+      "@mai-kit/assets",
+      "@mai-kit/analysis",
+      "@mai-kit/draw",
+    ],
+  );
+
   for (const packageItem of sidebar) {
     assert.ok(packageItem.items.length > 0, `${packageItem.text} has no API categories`);
     for (const category of packageItem.items) {
@@ -98,9 +127,29 @@ void test("utils public entry points remain separated in API docs", async () => 
 
   assert.match(utils, /@mai-kit\/utils\/judgement/u);
   assert.match(utils, /@mai-kit\/utils\/song/u);
-  const sidebar = await readApi("typedoc-sidebar.json");
-  assert.match(sidebar, /"text": "@mai-kit\/utils\/judgement"/u);
-  assert.match(sidebar, /"text": "@mai-kit\/utils\/song"/u);
+  const sidebar = JSON.parse(await readApi("typedoc-sidebar.json"));
+  const utilsSidebar = sidebar.find((item) => item.text === "@mai-kit/utils");
+  assert.ok(utilsSidebar);
+
+  const judgementCategory = utilsSidebar.items.find((item) => item.text === "判定计算");
+  assert.ok(judgementCategory);
+  const judgementTexts = judgementCategory.items.map((item) => item.text);
+  assert.ok(judgementTexts.includes("@mai-kit/utils/judgement"));
+  assert.ok(judgementTexts.includes("normalizeChartJudgements"));
+  assert.ok(judgementTexts.includes("calculateAchievement"));
+
+  const songCategory = utilsSidebar.items.find((item) => item.text === "谱面索引");
+  assert.ok(songCategory);
+  const songTexts = songCategory.items.map((item) => item.text);
+  assert.ok(songTexts.includes("@mai-kit/utils/song"));
+  assert.ok(songTexts.includes("buildSongDxMaxMap"));
+
+  const formulaCategory = utilsSidebar.items.find((item) => item.text === "常用公式");
+  assert.ok(formulaCategory);
+  const formulaTexts = formulaCategory.items.map((item) => item.text);
+  assert.ok(formulaTexts.includes("@mai-kit/utils"));
+  assert.ok(formulaTexts.includes("calculateDxRating"));
+
   assert.doesNotMatch(root, /normalizeChartJudgements\.md/u);
   assert.match(judgement, /normalizeChartJudgements/u);
   assert.match(song, /buildSongDxMaxMap/u);
@@ -147,4 +196,17 @@ void test("package pages include usage examples", async () => {
   assert.match(prober, /^## 错误处理$/mu);
   assert.match(analysis, /^## 示例$/mu);
   assert.match(analysis, /^\*\*重算 Best50\*\*$/mu);
+});
+
+void test("cross-package error docs link to shared MaiKitError", async () => {
+  const database = await readApi("@mai-kit/database/classes/MaimaiDatabaseError.md");
+  const prober = await readApi("@mai-kit/prober/classes/ProberError.md");
+  const draw = await readApi("@mai-kit/draw/classes/DrawError.md");
+
+  assert.match(database, /\/api\/@mai-kit\/shared\/classes\/MaiKitError/u);
+  assert.match(prober, /\/api\/@mai-kit\/shared\/classes\/MaiKitError/u);
+  assert.match(draw, /\/api\/@mai-kit\/shared\/classes\/MaiKitError/u);
+  // @see {@link …} 应产出可点击链接，而不是纯文本参阅项
+  assert.match(database, /\[isMaimaiDatabaseError\]/u);
+  assert.match(database, /\[MaiKitError\]/u);
 });

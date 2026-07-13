@@ -43,12 +43,12 @@ const me = createLxnsClient({
 const [profile, bests] = await Promise.all([me.getProfile(), me.getBests()]);
 
 // 使用 LXNS 公开数据补充曲目、素材和谱面标签
-const playerDraw = await new Draw({
+const draw = new Draw({
   database: new LxnsMaimaiDatabase(),
-}).withPlayer(profile, bests);
+});
 
-// render() 返回 PNG 字节
-const poster = await playerDraw.render("poster");
+// 一种图一个方法，返回 PNG 字节
+const poster = await draw.poster(profile, bests);
 writeFileSync("poster.png", poster);
 ```
 
@@ -57,20 +57,45 @@ writeFileSync("poster.png", poster);
 
 ### 可选版式
 
-| 版式     | 说明                       |
-| -------- | -------------------------- |
-| `poster` | 完整成绩海报（版式默认值） |
-| `best15` | 新曲 Best15 单图           |
-| `best35` | 旧曲 Best35 单图           |
-| `best50` | B50 全曲单图               |
+`Draw` 上 **一种图一个方法**（成对 `*Svg` 出矢量图），共用 16:9 主题与末位 `RenderOptions`：
+
+| 方法                           | 说明                                   |
+| ------------------------------ | -------------------------------------- |
+| `poster`                       | 完整成绩海报（需档案 + Best50 + 标签） |
+| `best15` / `best35` / `best50` | 曲目板（署名 + `Bests`，内部只切割）   |
+| `chart`                        | 单曲成绩卡                             |
+| `upgrades`                     | 加分推荐板                             |
+
+```ts
+const player = { name: profile.name, rating: profile.rating };
+const opts = { scale: 1, footerLeft: "my-app" };
+
+await draw.best15(player, bests, opts);
+await draw.chart(scoreChart, opts);
+
+// 加分板：全曲 getScores() + 定数 → rankUpgradeCandidates（勿仅 B50）
+await draw.upgrades({ candidates }, opts);
+```
 
 需要矢量图时：
 
 ```ts
-const svg = await playerDraw.renderSvg("poster");
+const svg = await draw.posterSvg(profile, bests, opts);
 ```
 
-清晰度默认 2 倍（海报约 3840×2160）。可用 `render("poster", { scale: 1 })` 调整。
+### 渲染选项 `RenderOptions`
+
+各方法最后一参可选，字段如下：
+
+| 字段            | 默认         | 说明                                             |
+| --------------- | ------------ | ------------------------------------------------ |
+| `scale`         | `2`          | 相对 1920×1080 的倍率（`2` → 约 3840×2160）      |
+| `fonts`         | 包内默认字体 | 自定义 satori 字体表                             |
+| `footerLeft`    | 无           | 左下页脚；与 `footerRight` 都不传则不画页脚      |
+| `footerRight`   | 无           | 右下页脚                                         |
+| `assetFallback` | `"error"`    | 封面/头像失败抛错；设 `"placeholder"` 则用占位图 |
+
+Best 板的署名为**第一位置参数**；单曲卡不展示玩家信息。
 
 ### 用 LXNS 开发者令牌查别人
 
@@ -82,7 +107,7 @@ const player = await client.getPlayer(friendCode);
 const [profile, bests] = await Promise.all([player.getProfile(), player.getBests()]);
 ```
 
-取得 `profile` 和 `bests` 后，沿用上面的 `Draw.withPlayer()` 渲染代码。
+取得 `profile` 和 `bests` 后，沿用上面的 `draw.poster(profile, bests)` 等代码。
 
 ## 相关文档
 

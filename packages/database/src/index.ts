@@ -27,15 +27,34 @@
  * ## 启用缓存
  *
  * ```ts
- * import { LxnsMaimaiDatabase, MemoryCacheStore } from "@mai-kit/database";
+ * import {
+ *   FileSystemCacheStore,
+ *   LxnsMaimaiDatabase,
+ *   MemoryCacheStore,
+ * } from "@mai-kit/database";
  *
- * const database = new LxnsMaimaiDatabase({
+ * // 内存（Node / Web）
+ * const memoryDb = new LxnsMaimaiDatabase({
  *   cache: {
  *     store: new MemoryCacheStore({ maxEntries: 512 }),
  *     ttlMs: 5 * 60_000,
  *   },
  * });
+ *
+ * // 磁盘（仅 Node）
+ * const diskDb = new LxnsMaimaiDatabase({
+ *   cache: {
+ *     store: new FileSystemCacheStore({ directory: "/var/cache/mai-kit", maxEntries: 2_000 }),
+ *     ttlMs: 24 * 60 * 60_000,
+ *   },
+ * });
  * ```
+ *
+ * ## 错误
+ *
+ * - {@link MaimaiDatabaseError}：HTTP / 业务 / 缓存等通用失败
+ * - {@link MaimaiDatabaseNotImplementedError}：适配无法实现某接口方法（如水鱼无别名 API）
+ * - 适配子类：`LxnsDatabaseError` / `DivingFishDatabaseError`
  *
  * [包与职责](/guide/architecture) · [快速开始](/guide/getting-started)
  */
@@ -43,7 +62,8 @@
 export * from "./adapters/lxns/index";
 export * from "./adapters/diving-fish/index";
 export * from "./cache";
-export * from "./chart-tags";
+// chart-tags 为适配内部实现，不从包根公开（用 MaimaiDatabase.getChartTags）
 export * from "./database";
 export * from "./error";
+export type { HttpResilienceOptions } from "@mai-kit/shared";
 export * from "./models";

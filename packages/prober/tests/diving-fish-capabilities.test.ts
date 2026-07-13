@@ -30,6 +30,9 @@ void test("Diving-Fish exposes score queries only for complete-record clients", 
     if (url.pathname.endsWith("/query/player")) {
       return jsonResponse({ rating: 15_000, nickname: "Public", charts: { dx: [record], sd: [] } });
     }
+    if (url.pathname.endsWith("/rating_ranking")) {
+      return jsonResponse([{ username: "DivingFish", ra: 16_000 }]);
+    }
     throw new Error(`Unexpected request: ${url}`);
   };
 
@@ -50,6 +53,9 @@ void test("Diving-Fish exposes score queries only for complete-record clients", 
       baseURL: "https://example.test/api/",
     }).getPlayer({ username: "public" });
     assert.equal("getScores" in publicPlayer, false);
+
+    const ranking = await dev.getRatingRanking();
+    assert.deepEqual(ranking, [{ username: "DivingFish", ra: 16_000 }]);
   } finally {
     globalThis.fetch = originalFetch;
   }

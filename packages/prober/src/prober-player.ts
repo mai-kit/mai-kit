@@ -20,7 +20,7 @@ import type {
  * // player 由任意 prober 适配创建
  * const profile = await player.getProfile();
  * const bests = await player.getBests();
- * // 可交给 Draw.withPlayer(profile, bests)
+ * // 可交给 Draw.poster(profile, bests)
  * ```
  */
 export interface ProberPlayer {
@@ -60,7 +60,10 @@ export interface ScoreHistoryCapability {
   getScoreHistory(key: ScoreKey): Promise<ScoreHistory>;
 }
 
-/** LXNS 个人玩家等具备全部通用查询能力的对象。 */
+/**
+ * 具备档案、Best50、全量成绩、最近成绩、走势、热力图与单谱面历史的玩家查询对象。
+ * 由支持上述全部能力的适配在绑定身份后返回（与具体数据源无关）。
+ */
 export type FullProberPlayer = ProberPlayer &
   ScoreListCapability &
   RecentScoresCapability &

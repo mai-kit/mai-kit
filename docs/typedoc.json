@@ -36,6 +36,9 @@
     "entryPoints": ["src/index.ts"],
     "readme": "none",
     "disableSources": false,
+    "disableGit": true,
+    "gitRevision": "main",
+    "sourceLinkTemplate": "https://github.com/wsyzxjn/mai-kit/blob/{gitRevision}/{path}#L{line}",
     "cascadedModifierTags": []
   },
   "plugin": ["typedoc-plugin-markdown", "typedoc-vitepress-theme", "./typedoc-plugin-api.js"],
@@ -76,12 +79,14 @@
     "B50 分析",
     "升分分析",
     "快照对比",
+    "Rating 构成",
     "常用公式",
     "Rating 与评级",
     "DX 分",
     "判定计算",
     "谱面索引",
     "领域类型",
+    "HTTP 工具",
     "徽章",
     "字体",
     "栅格化",
@@ -102,7 +107,11 @@
       "LevelIndex": "/api/@mai-kit/shared/enumerations/LevelIndex",
       "Collection": "/api/@mai-kit/shared/interfaces/Collection",
       "CollectionType": "/api/@mai-kit/shared/type-aliases/CollectionType",
-      "MaiKitError": "/api/@mai-kit/shared/classes/MaiKitError"
+      "CollectionRequired": "/api/@mai-kit/shared/interfaces/CollectionRequired",
+      "CollectionRequiredSong": "/api/@mai-kit/shared/interfaces/CollectionRequiredSong",
+      "MaiKitError": "/api/@mai-kit/shared/classes/MaiKitError",
+      "MaiKitErrorOptions": "/api/@mai-kit/shared/interfaces/MaiKitErrorOptions",
+      "isMaiKitError": "/api/@mai-kit/shared/functions/isMaiKitError"
     }
   },
   "hideBreadcrumbs": true,

@@ -1,4 +1,4 @@
-import type { Score } from "@mai-kit/prober";
+import type { RateType, Score } from "@mai-kit/prober";
 
 /** 含单曲 Rating 的成绩；用于需要精确比较 Rating 的分析。 */
 export interface RatedScore extends Score {
@@ -22,11 +22,20 @@ export interface ScoreUpgrade {
   levelValue: number;
   /** 当前达成率对应的 Rating。 */
   currentRating: number;
-  /** 目标达成率。 */
+  /** 目标达成率（百分数）。 */
   targetAchievement: number;
+  /**
+   * 目标达成率对应的评级码（`sssp` … `d`）。
+   * 由 `rateFromAchievement(targetAchievement)` 得到，便于展示「目标 SSS+」。
+   */
+  targetRate: RateType;
   /** 目标达成率对应的 Rating。 */
   targetRating: number;
-  /** `targetRating - currentRating`。 */
+  /**
+   * 增量含义取决于产出函数：
+   * - {@link analyzeScoreUpgrade} / {@link rankUpgradeCandidates}：单曲 Rating 增量
+   * - {@link rankBestsUpgradeCandidates}：**B50（B15+B35）总分**增量
+   */
   gain: number;
 }
 

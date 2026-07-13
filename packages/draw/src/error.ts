@@ -2,7 +2,7 @@ import { MaiKitError } from "@mai-kit/shared";
 
 /**
  * 绘制层错误：字体加载、satori、resvg 或玩家数据聚合（如雷达标签不足）失败时抛出。
- * @see isDrawError
+ * @see {@link isDrawError}
  */
 export class DrawError extends MaiKitError {
   constructor(message: string, options?: { code?: number | string; cause?: unknown }) {
@@ -17,7 +17,7 @@ export class DrawError extends MaiKitError {
  * @example
  * ```ts
  * try {
- *   await playerDraw.render("poster");
+ *   await draw.poster(profile, bests);
  * } catch (error) {
  *   if (isDrawError(error)) console.error(error.message);
  * }

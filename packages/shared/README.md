@@ -1,6 +1,7 @@
 # @mai-kit/shared
 
-mai-kit 各包共享的基础工具与类型。
+mai-kit 各包共享的基础工具与类型：错误基类、maimai 领域原语，以及适配层可选用的
+无业务 HTTP 工具（超时 / 重试 / 同键合并）。
 
 ## MaiKitError
 
@@ -52,8 +53,23 @@ class MyPackageError extends MaiKitError {
 - `Collection`：收藏品（也用于玩家装备的称号 / 头像 / 姓名框 / 背景）。
 - `CollectionRequired` / `CollectionRequiredSong`：收藏品达成要求。
 
+## HTTP 工具（适配可选）
+
+```ts
+import { fetchWithResilience, RequestCoalescer, type HttpResilienceOptions } from "@mai-kit/shared";
+
+const response = await fetchWithResilience(url, { headers }, { timeoutMs: 10_000, retries: 1 });
+const coalescer = new RequestCoalescer();
+const body = await coalescer.run(`GET ${url}`, async () => response.json());
+```
+
+- **默认不开启**超时 / 重试；由 database / prober 适配在构造参数中传入。
+- 不抛包级业务错误：调用方把网络失败映射为 `ProberError` / `MaimaiDatabaseError` 等。
+- 合并键应对齐「已读完 body 的结果」，不要合并裸 `Response`。
+
 ## 导出
 
 - `MaiKitError` / `isMaiKitError` / `MaiKitErrorOptions`：统一错误基类与工具。
 - maimai 领域原语：`SongType`、`LevelIndex`、`FCType`、`FSType`、`RateType`、
   `CollectionType`、`Collection`、`CollectionRequired`、`CollectionRequiredSong`。
+- HTTP：`fetchWithResilience` / `RequestCoalescer` / `HttpResilienceOptions`。

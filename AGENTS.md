@@ -31,6 +31,7 @@
 
 - 本地磁盘路径读图（`coverPath` 非 URL）：**仅 Node**；Web 用 data/http(s)/blob URI
 - PNG 栅格引擎：Node `resvg-js` / Web `resvg-wasm`（结果都是 `Uint8Array`）
+- database `FileSystemCacheStore`：**仅 Node**（`node:fs` 动态 import）；Web 用 `MemoryCacheStore` 或自实现
 
 ## 包地图
 
@@ -58,8 +59,8 @@ shared  ←  utils  ←  database / prober / assets
 | 禁止反向依赖          | 下层不得 import 上层（如 `shared` 不能依赖 `draw`）                                                                                      |
 | `database` ↔ `prober` | **互不依赖**。静态数据 vs 玩家数据，边界清晰；draw 只通过最小结构接口连接二者                                                            |
 | `draw` → `database`   | **不**把 database 当作硬依赖。draw 只声明最小 `AssetSource` / `ChartTagSource` / `SongListSource`；经注入使用                            |
-| `draw` → `prober`     | 有 runtime 依赖（`Draw.withPlayer()` 消费 prober 模型）。字段尽量透传，避免中间 DTO                                                      |
-| `draw` → `utils`      | `Draw.withPlayer()` 用 utils 算 `dx_max` / 定数 map；**填 dx_max 是 draw 职责**，不要丢给调用方                                          |
+| `draw` → `prober`     | 有 runtime 依赖（`Draw.poster` 等消费 prober 模型）。字段尽量透传，避免中间 DTO                                                          |
+| `draw` → `utils`      | `Draw` 出图时用 utils 算 `dx_max` / 定数 map；**填 dx_max 是 draw 职责**，不要丢给调用方                                                 |
 | `analysis`            | 依赖 prober 模型与 utils 公式；只做确定性内存分析，不请求 database / prober API                                                          |
 | `utils`               | 仅纯函数；不依赖 database/prober/analysis/draw                                                                                           |
 | 领域原语              | 放 `@mai-kit/shared`（`SongType` / `LevelIndex` / `FCType` / `FSType` / `RateType` / `Collection*`），database / prober 再导出，避免漂移 |
@@ -72,7 +73,8 @@ shared  ←  utils  ←  database / prober / assets
 
 - `MaiKitError` / `isMaiKitError`：全仓库错误基类
 - maimai 领域原语（类型 + `LevelIndex` 枚举）
-- 保持精简；不放网络、不放业务适配器
+- 可选 HTTP 工具：`fetchWithResilience` / `RequestCoalescer`（无业务、无数据源绑定；适配映射错误）
+- 保持精简；**不放**查分/曲目适配或业务流程；不把某一 CDN/API 写进 shared
 
 ### `@mai-kit/utils`
 
@@ -87,7 +89,7 @@ shared  ←  utils  ←  database / prober / assets
 - 接口：`MaimaiDatabase`（曲目 / 别名 / 收藏品 / 素材二进制）
 - 实现：`LxnsMaimaiDatabase`（公开 API + 素材 CDN）
 - 可选缓存：适配器创建参数 `cache: { store, ttlMs? }`；省略即关闭
-- 通用缓存接口：`DatabaseCacheStore`；内置双端 `MemoryCacheStore`（LRU）
+- 通用缓存接口：`DatabaseCacheStore`；内置 `MemoryCacheStore`（双端 LRU）、`FileSystemCacheStore`（**Node-only** 磁盘）
 - **不含**玩家成绩、好友码查询
 - 新数据源：实现 `MaimaiDatabase`，放 `src/adapters/<name>/`
 - DXRating 社区谱面标签以本地快照发布；GitHub Actions 每周同步，运行时不请求上游
@@ -119,12 +121,11 @@ shared  ←  utils  ←  database / prober / assets
 
 ### `@mai-kit/draw`
 
-- `Draw`：`new Draw({ database }).withPlayer(profile, bests)` → `PlayerDraw`
-- `PlayerDraw`：`render(layout)` / `renderSvg(layout)` 产出 PNG / SVG **bytes**（双端）；落盘由调用方负责
-- 版式 `DrawLayout`：`poster` | `best15` | `best35` | `best50`（不再为每版式各写一对空壳方法）
+- `Draw`：扁平入口，**一种图一个方法**（`poster` / `best15` / `best35` / `best50` / `chart` / `upgrades` + 对应 `*Svg`）
+- 末位 `RenderOptions`：`scale`（默认 2）/ `fonts` / `footerLeft` / `footerRight` / `assetFallback`（默认 `"error"`）；单曲卡不画玩家栏
+- 按图传最小数据：完整海报要 `profile`+`bests`+标签；Best 板要署名+`Bests`（库内只 slice 不排序，不足则少画）；加分候选由宿主用全曲+定数经 `rankBestsUpgradeCandidates`（**B15/B35 增量**，非单曲理论加分）
 - **不自带** `assets/`；默认字体与 wasm 经 `@mai-kit/assets`
 - PNG：Node `@resvg/resvg-js`，Web `@resvg/resvg-wasm` + assets 包内 wasm
-- `Draw.withPlayer(profile, bests)`：prober + database 本地标签 / 曲目数据 → `PlayerDraw`（异步聚合）
 - 徽章 / 字体 / wasm → `@mai-kit/assets`；封面 / 头像 → `database` / data URI
 
 ## 典型数据流
@@ -135,8 +136,7 @@ B50 海报（最常见集成路径）：
 createLxnsClient({ personalAccessToken })
   .me()
   → getProfile() + getBests()
-  → new Draw({ database }).withPlayer(profile, bests)
-  → playerDraw.render("poster")
+  → new Draw({ database }).poster(profile, bests)
   → Uint8Array (PNG)
 ```
 
@@ -208,17 +208,35 @@ pnpm --filter @mai-kit/draw test:integration:lxns   # 真数据集成
 
 合理分层示例：
 
-| 合理                         | 不合理                                                 |
-| ---------------------------- | ------------------------------------------------------ |
-| adapter 隔离数据源           | 同包内 A 只调 B、B 只调 C 且无独立复用                 |
-| `AssetSource` 收窄依赖       | 再包一层 `AssetSourceAdapter` 无行为差异               |
-| `Draw.withPlayer()` 一次聚合 | `withPlayer()` → `normalize` → `toPoster` 三次同构变换 |
-| 组件 / 类持有渲染逻辑        | 类空壳 + 旁路 `render.ts` 重复职责                     |
+| 合理                     | 不合理                                        |
+| ------------------------ | --------------------------------------------- |
+| adapter 隔离数据源       | 同包内 A 只调 B、B 只调 C 且无独立复用        |
+| `AssetSource` 收窄依赖   | 再包一层 `AssetSourceAdapter` 无行为差异      |
+| `Draw.poster()` 直接出图 | `withPlayer()` → 中间对象 → `render` 空壳中转 |
+| 组件 / 类持有渲染逻辑    | 类空壳 + 旁路 `render.ts` 重复职责            |
 
 #### 4. 字段与模型：透传优先
 
 - prober 原始字段（`rate` / `fc` / `dx_score` / `course_rank`…）**透传**到 draw；展示格式化在渲染时做。
 - 不为海报再发明一套平行命名，除非语义确实不同（如可选的 `dx_max` 是注入字段，不是 prober 已有字段的改名）。
+
+#### 4b. 禁止冗余传参（硬规则）
+
+公开 API / DTO **不得**让调用方（或中间聚合层）为同一事实写两遍。
+
+| 禁止                 | 说明                                                                                               |
+| -------------------- | -------------------------------------------------------------------------------------------------- |
+| 派生字段与源字段双写 | 如 `charts` 已有成绩，又必填 `ratingDistribution` / 再抄一份 `personalMetrics`                     |
+| 两套平行统计         | 如 summary 与 personalMetrics 各算一遍且指标还不一致                                               |
+| 同义双 API           | 如 `foo` 与 `fooAlias` 行为完全相同（语义别名也不要；用文档说明场景即可）                          |
+| 多路径必填叠加       | 同一资源同时要求 data URI + path + database 拉取都传；应是 **可选互斥回退链**（有 A 用 A，否则 B） |
+
+**正确做法：**
+
+1. 明确 **权威字段**（source of truth）：如 draw 的 `player` / `charts` / `summary` / `radar`。
+2. 展示用派生量在 **使用点现算**（渲染 / 格式化层），或只存 **一份** 聚合结果（如 `summary`）。
+3. 覆盖入口必须是 **整表替换**（如可选 `personalMetrics`），不是与默认字段平行再抄数。
+4. 新增 API 前自问：这个参数能否从已有参数推出？能则不要加。
 
 #### 5. 回退 / 兜底行为：禁止自行设计
 
@@ -241,7 +259,8 @@ pnpm --filter @mai-kit/draw test:integration:lxns   # 真数据集成
 2. **已确认的回退**才实现，并在代码/README 写明约定（避免后人再「顺手」加兜底）。
 3. **改已有回退**同样要确认，不要默默收紧或放宽。
 
-> 现状：draw 里仍有部分历史回退（如封面失败用占位图）。**新增或扩大**此类行为须确认；清理历史回退时也应先问用户是否保留。
+> 现状：draw 素材失败默认 **抛 `DrawError`**；仅当出图方法传入 `{ assetFallback: "placeholder" }` 时才用内置占位图。
+> **新增或扩大**静默回退须确认；改默认策略须确认。
 
 ### 包结构
 
@@ -259,21 +278,91 @@ packages/<name>/
 ```
 
 - 公共 API 只从 `src/index.ts` 导出（多 entry 时在 package `exports` / tsdown 明确声明）。
+- **未从包根 `index` 导出的模块 = 内部实现**（适配内 `mappers`、`chart-tags`、`http` 私有类等）；测试可相对路径引用源码，**不要**为测而扩大公开面。
 - 源码相对 import / export **不带扩展名**，由 `moduleResolution: "bundler"` 与 tsdown 解析；发布产物仍是 `.js`。
 - draw：入口类 `draw.ts`（无 JSX，`createElement`）；**所有 `.tsx` 布局组件放 `components/`**。
 
+#### 公开面收窄与 API 文档（TypeDoc）（硬规则）
+
+**目标：** 用户 `import` 与 API 站只看到**稳定、必要**的表面；适配内部 map / 快照 / 私有方法既不导出也不进文档。
+
+| 规则                               | 说明                                                                                                                                           |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **包根 `index` = 唯一公开面**      | TypeDoc `entryPoints` 跟 `src/index.ts`（多 entry 时跟 package `exports`）；未从此导出的一律视为内部                                           |
+| **private / protected 永不进文档** | `docs/typedoc.json`：`excludePrivate` / `excludeProtected`：`true`。类上 `private loadAssets()` 等**禁止**出现在 API 页                        |
+| **@internal 不进文档**             | `excludeInternal`：`true`。包内再导出、构建脚本、仅为类型拼装的 re-export 标 `@internal`；**不要**只靠 `@hidden` 注释指望藏文档                |
+| **适配 helper 默认不公开**         | 如 `mapDivingFish*`、`divingFishCoverId`、`getLocalChartTags` / 快照加载等：**不从包根 export**；用户走 `createXxxClient` / `MaimaiDatabase.*` |
+| **不为测试扩大公开面**             | 测内部逻辑时用相对路径引用 `src/...`，或只测公开 API；禁止 `export` 仅为了 `import "@scope/pkg"` 方便单测                                      |
+| **高级出口要标明**                 | 若必须公开（如 draw 的 `B50Poster`），标 `@beta`，README 写「高级 / 可能变动」                                                                 |
+
+**反例 / 正例：**
+
+```ts
+// ❌ 把适配内部 map 挂到包根
+export { mapDivingFishRecord } from "./adapters/diving-fish/mappers";
+
+// ✅ 包根只给用户路径
+export { createDivingFishClient } from "./adapters/diving-fish";
+
+// ❌ 指望未标注的 private 进文档或不进文档含糊不清
+// ✅ 实现细节用 private；跨文件内部符号不 export 或 @internal
+
+// ❌ 为 chart-tags.test 从 index 导出 getLocalChartTags
+// ✅ 测试走 db.getChartTags() 或 import "../src/chart-tags.ts"
+```
+
+改公开 export 或 TypeDoc 可见性后跑 `pnpm docs:build`（含 generated-api 测试：私有成员 / 未导出 helper 不得出现在 API md）。
+
 ### 错误
 
-| 包       | 错误类型              | 守卫                    |
-| -------- | --------------------- | ----------------------- |
-| shared   | `MaiKitError`         | `isMaiKitError`         |
-| database | `MaimaiDatabaseError` | `isMaimaiDatabaseError` |
-| prober   | `ProberError`         | `isProberError`         |
-| draw     | `DrawError`           | `isDrawError`           |
+| 包       | 错误类型                            | 守卫                                  |
+| -------- | ----------------------------------- | ------------------------------------- |
+| shared   | `MaiKitError`                       | `isMaiKitError`                       |
+| database | `MaimaiDatabaseError`               | `isMaimaiDatabaseError`               |
+| database | `MaimaiDatabaseNotImplementedError` | `isMaimaiDatabaseNotImplementedError` |
+| prober   | `ProberError`                       | `isProberError`                       |
+| prober   | `ProberNotImplementedError`         | `isProberNotImplementedError`         |
+| draw     | `DrawError`                         | `isDrawError`                         |
 
 - 新包错误 **必须** 继承 `MaiKitError`，`name` 设为类名。
 - 适配器把 HTTP / 业务错误归一成**包级基类或其子类**，不把裸 `fetch` 异常抛给调用方（除非刻意透传 `cause`）。
-- **适配专用错误**放在 `adapters/<name>/error.ts`，继承包级错误（如 `LxnsProberError extends ProberError`、`DivingFishDatabaseError extends MaimaiDatabaseError`），并导出 `is*` 守卫；宽捕获用包级 `is*`，区分数据源用适配 `is*`。
+- **适配专用错误**放在 `adapters/<name>/error.ts`，继承包级错误（如 `LxnsProberError extends ProberError`、`DivingFishDatabaseError extends MaimaiDatabaseError`），并导出 `is*` 守卫。
+
+#### 错误分层（硬规则）
+
+```
+MaiKitError                          # shared：全仓基类
+  └─ <Package>Error                  # 包根 error.ts：HTTP / 业务 / 缓存等
+       ├─ <Package>NotImplementedError   # 包根：能力缺失（与数据源无关）
+       └─ <Adapter>Error                 # adapters/<name>/error.ts：仅该源的失败
+```
+
+| 层级           | 放哪里                     | 何时抛                                             | 调用方守卫                                                            |
+| -------------- | -------------------------- | -------------------------------------------------- | --------------------------------------------------------------------- |
+| 包级基类       | `src/error.ts`             | 鉴权失败、HTTP、业务码、缓存等「请求/处理失败」    | `isProberError` / `isMaimaiDatabaseError`                             |
+| **包级未实现** | `src/error.ts`             | **通用接口方法必须挂上，但当前适配上游无对等能力** | `isProberNotImplementedError` / `isMaimaiDatabaseNotImplementedError` |
+| 适配专用       | `adapters/<name>/error.ts` | 该数据源特有的失败（便于区分 LXNS vs 水鱼）        | `isLxns*` / `isDivingFish*`                                           |
+
+**包级未实现错误（`*NotImplementedError`）必须遵守：**
+
+1. **定义在包根 `error.ts`**，继承该包 `*Error`；带 `method`（方法名）与可选 `adapter`（仅文案，如 `"Diving-Fish"`），并导出 `is*NotImplementedError`。
+2. **各适配实现复用包级类**，不要在 `adapters/<name>/` 里再写 `unsupported()` / `NotSupported` 抛适配专用错误。
+3. **语义与 HTTP 失败分离**：`isDivingFishDatabaseError(notImplemented)` 应为 **false**；调用方才能用 `is*NotImplementedError` 做换源/降级，用适配 `is*` 处理网络失败。
+4. **优先类型收窄**：能用条件类型 / `*Capability` 在类型上不暴露方法时，不要挂空实现再抛；仅在「接口强制实现」或运行时兼容层必须占位时抛 `*NotImplementedError`。
+5. **示例（水鱼 database）**：`getAliasList` / 收藏品 / 非 `jacket` 的 `getAsset` → `MaimaiDatabaseNotImplementedError`；music_data HTTP 失败 → `DivingFishDatabaseError`。
+
+```ts
+// ✅ 适配内：复用包级未实现错误
+throw new MaimaiDatabaseNotImplementedError({
+  method: "getAliasList",
+  adapter: "Diving-Fish",
+});
+
+// ❌ 禁止：在适配里造一套「不支持」并抛适配专用错误
+throw new DivingFishDatabaseError({ message: "… does not support getAliasList" });
+```
+
+捕获约定：宽捕获用包级 `is*` → 能力缺失用 `is*NotImplementedError` → 区分数据源用适配 `is*`。
 
 ### 适配器模式
 
@@ -281,6 +370,7 @@ packages/<name>/
 - LXNS / Diving-Fish 等是**当前提供的适配**，不是「默认唯一数据源」；新增源时在 `adapters/<name>/` 实现，勿泄漏专有字段进通用模型。
 - **禁止**把某一适配的专有概念写进通用模型（除非该语义在领域上确实通用）。
 - draw 的 `AssetSource` / `DrawAssetType` 是**故意收窄**的本地接口，不要为了“方便”改成 import `MaimaiDatabase`。
+- **能力缺失**用包级 `*NotImplementedError`（见上节）；不要把「未实现」伪装成适配 HTTP 错误。
 
 ### 文档与文案：通用接口 vs 适配
 
@@ -349,15 +439,21 @@ export interface ProberPlayer { ... }
 
 **任意实现改动结束前，必须本地确认下列检查通过；未通过不得声称完成。**
 
-| 顺序 | 命令                             | 含义                             |
-| ---- | -------------------------------- | -------------------------------- |
-| 1    | `pnpm check`                     | oxfmt + oxlint（格式与静态检查） |
-| 2    | 相关包 `pnpm test`               | 至少覆盖改动涉及的包             |
-| 3    | 触及类型/跨包时 `pnpm typecheck` | build-first 全仓类型检查         |
+| 顺序 | 命令                             | 含义                                          |
+| ---- | -------------------------------- | --------------------------------------------- |
+| 1    | `pnpm check`                     | oxfmt + oxlint（格式与静态检查）              |
+| 2    | 相关包 `pnpm test`               | 至少覆盖改动涉及的包                          |
+| 3    | 触及类型/跨包时 `pnpm typecheck` | build-first 全仓类型检查                      |
+| 4    | 触及文档时 `pnpm docs:build`     | 重生 TypeDoc API + VitePress 构建与生成物测试 |
 
 - 可先 `pnpm fix` 自动修 format/lint，再 `pnpm check` 确认绿。
 - 改公共 API / monorepo 结构时：**check + typecheck + 相关 test** 全绿。
 - agent：改文件后**主动跑门禁**；失败则修到通过，不要留给用户发现。
+- **文档改完必跑 `pnpm docs:build`**（不要只跑 `api` 或只改 md 就声称完成）。触发范围包括但不限于：
+  - `docs/**`（guide、typedoc 配置/插件、`api-categories.json`、站点配置）
+  - 公共 API 的 JSDoc / `@packageDocumentation` / 包 README 中会影响生成页的说明
+  - 会改变 TypeDoc 输出或 VitePress 侧栏的任意改动
+  - 失败则修到 `docs:build` 通过（含其中的 generated-api 测试）
 
 ## 测试与环境
 
@@ -382,6 +478,8 @@ LXNS_API_PERSONAL_ACCESS_TOKEN=your_personal_token
 
 - 领域共享类型进 `shared`，再在 database/prober 再导出
 - 新数据源用 adapter，保持通用接口稳定
+- 适配无法实现的通用方法抛**包级** `*NotImplementedError`，不抛适配专用错误
+- **一个事实一份参数**：派生量现算或只存 summary 一类单点聚合，禁止双写（见「禁止冗余传参」）
 - 改公共 API 时同步包 README、通用接口 JSDoc 与本文件中过时的描述
 - **每次改动确认 `pnpm check`（及必要的 test / typecheck）通过**
 - draw 展示逻辑在渲染/格式化层处理，不改 prober 字段名迁就海报
@@ -390,12 +488,13 @@ LXNS_API_PERSONAL_ACCESS_TOKEN=your_personal_token
 - **默认按双端设计**；单端 API 在 JSDoc / README 标明例外原因
 - **回退/占位/静默失败：先问用户，确认后再写**
 - **通用接口 / 模型的文档只写与数据源无关的语义**；某一适配的细节只写在 `adapters/*` 与「适配示例」小节
+- **公开面从包根 `index` 收窄维护**；适配 map / 快照等内部符号不 export；`private` / `@internal` 保证不进 TypeDoc
 
 **不应该：**
 
 - 让 `database` 依赖 `prober` 或反过来
 - 让 `draw` 硬依赖完整 `MaimaiDatabase` 接口
-- 在 `shared` 塞网络客户端或 LXNS 细节
+- 在 `shared` 塞查分/曲目适配或 LXNS/水鱼 URL 与业务错误
 - 用 tsc emit / project references / `paths` 绕过 build-first
 - 删除 tsdown 的 `fixedExtension: false` / `hash: false` 而不验证产物
 - 提交 `.env`、真实 token、或大体积无关二进制
@@ -405,6 +504,9 @@ LXNS_API_PERSONAL_ACCESS_TOKEN=your_personal_token
 - **无文档例外却把核心路径写成仅 Node**（顶层 `node:fs` / 无 Web 替代的原生模块）
 - **未确认就加 fallback**（占位图、默认文案、吞异常、假数据、环境自动降级等）
 - **把某一适配写成「默认数据源」**，或在 `ProberPlayer` / `MaimaiDatabase` 等通用接口 JSDoc 里绑定 LXNS 路径
+- **在适配内自造 `unsupported()` 并用适配专用错误表示「方法未实现」**（应使用包级 `*NotImplementedError`）
+- **冗余传参**：与权威字段重复的派生字段必填、同义双 API、两套平行统计
+- **为测而 export 内部 helper**，或让 `private` / 未导出实现细节出现在 API 文档
 
 ## 文档索引
 
@@ -413,8 +515,8 @@ LXNS_API_PERSONAL_ACCESS_TOKEN=your_personal_token
 | `README.md`                                   | 仓库总览、开发命令、架构要点                         |
 | `packages/*/README.md`                        | 各包安装、用法、错误、导出（通用接口优先，适配分节） |
 | `docs/guide/*`                                | 面向使用方的说明书（非仓库内部 / 非 CI 说明）        |
-| `.agents/skills/ts-library-monorepo/SKILL.md` | monorepo 工具链决策与脚手架模板                      |
-| `AGENTS.md`（本文件）                         | agent 工作约定与包边界（含文档：通用接口 vs 适配）   |
+| `.agents/skills/ts-library-monorepo/SKILL.md` | monorepo 工具链、适配错误、公开面/TypeDoc、冗余传参  |
+| `AGENTS.md`（本文件）                         | agent 工作约定、包边界、公开面收窄与文档规则         |
 
 消费侧端到端示例与更细 API 表若根 README 未写全，以各包 README 与 `src/index.ts` 导出为准。
 

@@ -13,6 +13,7 @@ import type {
   SongCollection,
   SongList,
 } from "../../models";
+import { fetchWithResilience, RequestCoalescer, type HttpResilienceOptions } from "@mai-kit/shared";
 import { getLocalChartTags } from "../../chart-tags";
 import { LxnsDatabaseError } from "./error";
 import { LxnsHttp } from "./lxns-http";
@@ -39,6 +40,10 @@ export interface LxnsMaimaiDatabaseOptions {
    * 不传则不缓存；draw 场景建议配置以减少重复拉取封面。
    */
   cache?: DatabaseCacheOptions;
+  /** JSON API 单次超时（毫秒）；省略不限制 */
+  timeoutMs?: number;
+  /** JSON API 网络 / 5xx 额外重试次数（默认 `0`） */
+  retries?: number;
 }
 
 /**
@@ -58,9 +63,15 @@ export class LxnsMaimaiDatabase implements MaimaiDatabase {
   private readonly http: LxnsHttp;
   private readonly assetBaseURL: string;
   private readonly cache?: DatabaseCache;
+  private readonly resilience: HttpResilienceOptions;
+  private readonly assetCoalescer = new RequestCoalescer();
 
   constructor(options: LxnsMaimaiDatabaseOptions = {}) {
-    this.http = new LxnsHttp({ baseURL: options.baseURL });
+    this.resilience = { timeoutMs: options.timeoutMs, retries: options.retries };
+    this.http = new LxnsHttp({
+      baseURL: options.baseURL,
+      ...this.resilience,
+    });
     this.assetBaseURL = options.assetBaseURL ?? LXNS_DEFAULT_ASSET_BASE_URL;
     this.cache = options.cache ? new DatabaseCache(options.cache) : undefined;
   }
@@ -139,27 +150,29 @@ export class LxnsMaimaiDatabase implements MaimaiDatabase {
       const ext = type === "music" ? "mp3" : "png";
       const url = new URL(`maimai/${type}/${id}.${ext}`, this.assetBaseURL);
 
-      let response: Response;
-      try {
-        response = await fetch(url);
-      } catch (error) {
-        throw new LxnsDatabaseError({
-          message: `Failed to fetch asset ${type}/${id}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-          cause: error,
-        });
-      }
+      return this.assetCoalescer.run(`GET ${url.href}`, async () => {
+        let response: Response;
+        try {
+          response = await fetchWithResilience(url, undefined, this.resilience);
+        } catch (error) {
+          throw new LxnsDatabaseError({
+            message: `Failed to fetch asset ${type}/${id}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            cause: error,
+          });
+        }
 
-      if (!response.ok) {
-        throw new LxnsDatabaseError({
-          status: response.status,
-          code: response.status,
-          message: `Failed to fetch asset ${type}/${id} (HTTP ${response.status})`,
-        });
-      }
+        if (!response.ok) {
+          throw new LxnsDatabaseError({
+            status: response.status,
+            code: response.status,
+            message: `Failed to fetch asset ${type}/${id} (HTTP ${response.status})`,
+          });
+        }
 
-      return new Uint8Array(await response.arrayBuffer());
+        return new Uint8Array(await response.arrayBuffer());
+      });
     };
 
     if (!this.cache) return load();

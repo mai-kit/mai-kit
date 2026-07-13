@@ -15,9 +15,9 @@ import type {
   SongType,
 } from "@mai-kit/shared";
 
-/** @hidden 领域原语文档见 `@mai-kit/shared`；此处再导出仅便于类型拼装 */
+/** @internal 领域原语文档见 `@mai-kit/shared`；此处再导出仅便于类型拼装 */
 export { LevelIndex };
-/** @hidden 领域原语文档见 `@mai-kit/shared` */
+/** @internal 领域原语文档见 `@mai-kit/shared` */
 export type {
   Collection,
   CollectionRequired,
@@ -31,7 +31,7 @@ export type {
 
 /**
  * 玩家档案（与具体查分服务无关的通用模型）。
- * 字段语义对齐常见查分器约定；可直接交给 `@mai-kit/draw` 的 `Draw.withPlayer`。
+ * 字段语义对齐常见查分器约定；可直接交给 `@mai-kit/draw` 的 `Draw.poster`。
  *
  * @example
  * ```ts

@@ -3,7 +3,46 @@
  * 领域计算（归一、满分、rating 公式）请用 `@mai-kit/utils`。
  */
 
-import { normalizeAchievement } from "@mai-kit/utils";
+import type { RateType } from "@mai-kit/shared";
+import { normalizeAchievement, rateFromAchievement } from "@mai-kit/utils";
+
+/** 评级码 → 展示文案（sssp → SSS+） */
+const RATE_LABELS: Record<RateType, string> = {
+  sssp: "SSS+",
+  sss: "SSS",
+  ssp: "SS+",
+  ss: "SS",
+  sp: "S+",
+  s: "S",
+  aaa: "AAA",
+  aa: "AA",
+  a: "A",
+  bbb: "BBB",
+  bb: "BB",
+  b: "B",
+  c: "C",
+  d: "D",
+};
+
+/**
+ * 评级码 → 海报用短文案。
+ *
+ * @param rate - `sssp` … `d`
+ * @returns 如 `"SSS+"`、`"SSS"`
+ */
+export function formatRateLabel(rate: RateType): string {
+  return RATE_LABELS[rate];
+}
+
+/**
+ * 目标达成率 → 「目标 SSS+」类副标题片段。
+ *
+ * 优先用显式 `targetRate`，否则由达成率推导。
+ */
+export function formatUpgradeTargetLabel(targetAchievement: number, targetRate?: RateType): string {
+  const rate = targetRate ?? rateFromAchievement(targetAchievement);
+  return `目标 ${formatRateLabel(rate)}`;
+}
 
 /**
  * 格式化达成率为四位小数百分比字符串。

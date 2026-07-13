@@ -1,23 +1,50 @@
 /**
  * TypeDoc 精简与导航插件：
- * 1. 按包边界 / 源文件为公开 API 分配语义分类
+ * 1. 按 docs/api-categories.json 为公开 API 分配语义分类（未匹配则报错）
  * 2. 去掉继承成员（Error.stack / captureStackTrace 等）
  * 3. 去掉源码不在本包内的符号（跨包 re-export）
  * 4. 去掉方法级「实现接口 / 重写成员」关系（类级关系保留）
+ * 5. 按依赖心智重排侧栏包序；utils 多入口展开到具体导出
+ * 6. 修正 monorepo 源码 GitHub 链接；合并 shared 等跨包 external 链接映射
  *
- * 在 packages 合并之后、写出 markdown 之前执行。
- * 优先挂 Converter.EVENT_END；若仍是单包扁平 project 则按源路径推断。
- * 另挂 Renderer.EVENT_BEGIN 作为合并后的最终兜底。
+ * 生命周期（为何 slim 挂两次）：
+ * - Converter.EVENT_END：各**单包**转换结束时，project 仍是扁平 children，先精简一轮。
+ * - Renderer.EVENT_BEGIN：packages **合并后**的最终 project，再 sort + slim + 源码链接
+ *   （合并会带回跨包 re-export / 打乱 category 顺序，必须再跑）。
  */
+import { readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Comment, CommentTag, Converter, ReflectionKind, Renderer } from "typedoc";
-import { writeFileSync } from "node:fs";
-import { join } from "node:path";
+
+import {
+  categoryFor,
+  packageNameFromModule,
+  packageNameFromSource,
+  sidebarItemText,
+  sortCategoryList,
+  sortModuleNames,
+  shouldDrop,
+  expandModuleChildren,
+} from "./typedoc-api-helpers.js";
+
+const pluginDir = dirname(fileURLToPath(import.meta.url));
+const categoriesConfig = JSON.parse(readFileSync(join(pluginDir, "api-categories.json"), "utf8"));
+
+/** ReflectionKind 名 → 数值（去掉 TS 枚举反向映射） */
+const KIND_NAMES = Object.fromEntries(
+  Object.entries(ReflectionKind)
+    .filter(([k, v]) => typeof v === "number" && Number.isNaN(Number(k)))
+    .map(([k, v]) => [k, v]),
+);
 
 /**
  * @param {import("typedoc").Application} app
  */
 export function load(app) {
-  const run = (/** @type {import("typedoc").ProjectReflection} */ project) => {
+  mergeExternalLinkMappings(app);
+
+  const runSlim = (/** @type {import("typedoc").ProjectReflection} */ project) => {
     slimProject(project);
   };
 
@@ -25,20 +52,20 @@ export function load(app) {
   app.converter.on(
     Converter.EVENT_RESOLVE_END,
     (context) => {
-      assignCategories(context.project);
+      assignCategories(context.project, app.logger);
     },
     100,
   );
 
-  // 各包子转换结束时（扁平 children）
+  // 单包转换结束（扁平 children）
   app.converter.on(Converter.EVENT_END, (context) => {
-    run(context.project);
+    runSlim(context.project);
   });
 
   // packages 合并后的最终 project
   app.renderer.on(Renderer.EVENT_BEGIN, (event) => {
     sortCategories(event.project, app.options.getValue("categoryOrder"));
-    run(event.project);
+    runSlim(event.project);
     linkSources(
       event.project,
       app.options.getValue("sourceLinkTemplate"),
@@ -57,6 +84,43 @@ export function load(app) {
 }
 
 /**
+ * 把 shared（及配置中的）公开符号补进 externalSymbolLinkMappings，
+ * 避免类型签名 / 注释里跨包名落成纯文本。
+ *
+ * @param {import("typedoc").Application} app
+ */
+function mergeExternalLinkMappings(app) {
+  /** @type {Record<string, Record<string, string>>} */
+  const extra = {
+    "@mai-kit/shared": {
+      RateType: "/api/@mai-kit/shared/type-aliases/RateType",
+      SongType: "/api/@mai-kit/shared/type-aliases/SongType",
+      FCType: "/api/@mai-kit/shared/type-aliases/FCType",
+      FSType: "/api/@mai-kit/shared/type-aliases/FSType",
+      LevelIndex: "/api/@mai-kit/shared/enumerations/LevelIndex",
+      Collection: "/api/@mai-kit/shared/interfaces/Collection",
+      CollectionType: "/api/@mai-kit/shared/type-aliases/CollectionType",
+      CollectionRequired: "/api/@mai-kit/shared/interfaces/CollectionRequired",
+      CollectionRequiredSong: "/api/@mai-kit/shared/interfaces/CollectionRequiredSong",
+      MaiKitError: "/api/@mai-kit/shared/classes/MaiKitError",
+      MaiKitErrorOptions: "/api/@mai-kit/shared/interfaces/MaiKitErrorOptions",
+      isMaiKitError: "/api/@mai-kit/shared/functions/isMaiKitError",
+    },
+  };
+
+  try {
+    const current = app.options.getValue("externalSymbolLinkMappings") ?? {};
+    const merged = { ...current };
+    for (const [pkg, map] of Object.entries(extra)) {
+      merged[pkg] = { ...(merged[pkg] ?? {}), ...map };
+    }
+    app.options.setValue("externalSymbolLinkMappings", merged);
+  } catch {
+    // 选项尚未注册时忽略；typedoc.json 仍保有基线映射
+  }
+}
+
+/**
  * packages 合并会丢失子项 categoryOrder；渲染前统一重排。
  *
  * @param {import("typedoc").ProjectReflection} project
@@ -65,21 +129,8 @@ export function load(app) {
 function sortCategories(project, order) {
   for (const child of project.children ?? []) {
     if (!child.categories) continue;
-    child.categories.sort(
-      (a, b) => categoryWeight(a.title, order) - categoryWeight(b.title, order),
-    );
+    child.categories = sortCategoryList(child.categories, order);
   }
-}
-
-/**
- * @param {string} title
- * @param {string[]} order
- */
-function categoryWeight(title, order) {
-  const index = order.indexOf(title);
-  if (index >= 0) return index;
-  const wildcard = order.indexOf("*");
-  return wildcard >= 0 ? wildcard : order.length;
 }
 
 /**
@@ -129,18 +180,23 @@ function reflectionPackageName(reflection) {
  */
 function buildSemanticSidebar(app, project) {
   const router = app.renderer.router;
-  return (project.children ?? [])
-    .filter((child) => child.kind === ReflectionKind.Module)
+  const modules = (project.children ?? []).filter((child) => child.kind === ReflectionKind.Module);
+  const orderedNames = sortModuleNames(
+    modules.map((m) => m.name),
+    categoriesConfig.packageOrder ?? [],
+  );
+  const byName = new Map(modules.map((m) => [m.name, m]));
+
+  return orderedNames
+    .map((name) => byName.get(name))
+    .filter(Boolean)
     .map((mod) => {
       const moduleUrl = router.getFullUrl(mod).replace(/index\.md$/u, "");
       const categories = (mod.categories ?? [])
         .map((category) => ({
           text: category.title,
           collapsed: true,
-          items: category.children.map((child) => ({
-            text: sidebarItemText(mod, child),
-            link: `/api/${router.getFullUrl(child)}`,
-          })),
+          items: flattenCategoryItems(mod, category.children, router),
         }))
         .filter((category) => category.items.length > 0);
 
@@ -154,109 +210,107 @@ function buildSemanticSidebar(app, project) {
 }
 
 /**
- * 多入口包在 TypeDoc 内以文件名命名；侧栏显示实际导入路径。
+ * 分类下的模块入口（如 utils/judgement）展开为「入口 + 子导出」。
  *
  * @param {import("typedoc").DeclarationReflection} mod
- * @param {import("typedoc").Reflection} child
+ * @param {import("typedoc").DeclarationReflection[]} children
+ * @param {import("typedoc").Router} router
  */
-function sidebarItemText(mod, child) {
-  if (mod.name !== "@mai-kit/utils" || child.kind !== ReflectionKind.Module) return child.name;
-  return child.name === "index" ? mod.name : `${mod.name}/${child.name}`;
+function flattenCategoryItems(mod, children, router) {
+  /** @type {{ text: string, link: string }[]} */
+  const items = [];
+
+  for (const child of children) {
+    const expanded = expandModuleChildren(
+      child,
+      ReflectionKind.Module,
+      (c) => !shouldDropReflection(c, packageNameFromModule(mod.name)),
+    );
+
+    if (expanded) {
+      items.push({
+        text: sidebarItemText(mod.name, child, ReflectionKind.Module),
+        link: `/api/${router.getFullUrl(child)}`,
+      });
+      for (const leaf of expanded) {
+        // 跳过嵌套 Module / 命名空间噪音
+        if (leaf.kind === ReflectionKind.Module) continue;
+        items.push({
+          text: leaf.name,
+          link: `/api/${router.getFullUrl(leaf)}`,
+        });
+      }
+      continue;
+    }
+
+    items.push({
+      text: sidebarItemText(mod.name, child, ReflectionKind.Module),
+      link: `/api/${router.getFullUrl(child)}`,
+    });
+  }
+
+  return items;
+}
+
+/**
+ * @param {import("typedoc").Reflection} child
+ * @param {string | null} modulePackage
+ */
+function shouldDropReflection(child, modulePackage) {
+  return shouldDrop(
+    {
+      flags: "flags" in child ? child.flags : undefined,
+      inheritedFrom: "inheritedFrom" in child ? child.inheritedFrom : undefined,
+      sources: "sources" in child ? child.sources : undefined,
+    },
+    modulePackage,
+  );
 }
 
 /**
  * @param {import("typedoc").ProjectReflection} project
+ * @param {import("typedoc").Logger} logger
  */
-function assignCategories(project) {
+function assignCategories(project, logger) {
   const children = project.children ?? [];
   const packageName =
     packageNameFromModule(project.packageName ?? "") ?? inferPackageFromChildren(children);
   if (!packageName) return;
 
+  if (!categoriesConfig.packages?.[packageName]) {
+    logger.error(`[typedoc-plugin-api] api-categories.json 缺少包 "${packageName}" 的分类规则`);
+    return;
+  }
+
   for (const child of children) {
-    const category = categoryFor(child, packageName);
-    if (!category) continue;
+    // 已有手写 @category 不覆盖
     const signatureComment = child.signatures?.find((signature) => signature.comment)?.comment;
-    const comment = child.comment ?? signatureComment ?? new Comment();
-    if (comment.getTag("@category")) continue;
+    const existing = child.comment ?? signatureComment;
+    if (existing?.getTag("@category")) continue;
+
+    const category = categoryFor(
+      {
+        name: child.name,
+        kind: child.kind,
+        sources: child.sources,
+      },
+      packageName,
+      categoriesConfig.packages,
+      KIND_NAMES,
+    );
+
+    if (!category) {
+      const file = child.sources?.[0]?.fileName ?? "(no source)";
+      logger.error(
+        `[typedoc-plugin-api] 未匹配分类: ${packageName}::${child.name} (${file})。请更新 docs/api-categories.json 或在源码写 @category。`,
+      );
+      continue;
+    }
+
+    const comment = existing ?? new Comment();
     if (!child.comment && !signatureComment) child.comment = comment;
     comment.blockTags.push(new CommentTag("@category", [{ kind: "text", text: category }]));
   }
-}
-
-/**
- * @param {import("typedoc").DeclarationReflection} reflection
- * @param {string} packageName
- * @returns {string | null}
- */
-function categoryFor(reflection, packageName) {
-  const file = reflection.sources?.[0]?.fileName?.replace(/\\/g, "/") ?? "";
-
-  if (packageName === "assets") {
-    if (/Font|font/u.test(reflection.name)) return "字体";
-    if (/Resvg|Wasm/u.test(reflection.name)) return "栅格化";
-    return "徽章";
-  }
-
-  if (packageName === "shared") {
-    return file.endsWith("/error.ts") ? "错误" : "领域类型";
-  }
-
-  if (packageName === "database") {
-    if (file.includes("/adapters/lxns/")) return "LXNS 适配";
-    if (file.includes("/adapters/diving-fish/")) return "Diving-Fish 适配";
-    if (file.endsWith("/cache.ts")) return "缓存";
-    if (file.endsWith("/error.ts")) return "错误";
-    return "接口与模型";
-  }
-
-  if (packageName === "prober") {
-    if (file.includes("/adapters/lxns/")) return "LXNS 适配";
-    if (file.includes("/adapters/diving-fish/")) return "Diving-Fish 适配";
-    if (file.endsWith("/error.ts")) return "错误";
-    return "接口与模型";
-  }
-
-  if (packageName === "draw") {
-    if (file.includes("/components/") || file.endsWith("/formatters.ts")) return "布局与格式化";
-    if (file.endsWith("/error.ts")) return "错误";
-    return "绘制接口";
-  }
-
-  if (packageName === "analysis") {
-    if (file.endsWith("/bests.ts")) return "B50 分析";
-    if (file.endsWith("/upgrades.ts")) return "升分分析";
-    if (file.endsWith("/compare.ts")) return "快照对比";
-    return "接口与模型";
-  }
-
-  if (packageName === "utils") {
-    if (reflection.kind === ReflectionKind.Module) {
-      if (reflection.name === "index") return "常用公式";
-      if (reflection.name === "judgement") return "判定计算";
-      if (reflection.name === "song") return "谱面索引";
-    }
-    if (
-      file.endsWith("/judgement.ts") ||
-      /Judgement|Penalty|NOTE_|BREAK_|NoteType|ChartNoteCounts|calculateAchievement|calculateChartDxScore|calculateDxScore|calculateMaxAchievementScores|dxMaxFromNoteCounts|normalizeBreak|normalizeChart|normalizeJudgement|normalizeNote|noteTotal/u.test(
-        reflection.name,
-      )
-    ) {
-      return "判定计算";
-    }
-    if (
-      /\/(achievement|rate|rating)\.ts$/u.test(file) ||
-      /normalizeAchievement|minimumAchievementForRate|rateFromAchievement|calculateDxRating|dxRatingCoefficient|requiredLevelValue/u.test(
-        reflection.name,
-      )
-    ) {
-      return "Rating 与评级";
-    }
-    if (file.endsWith("/dx-score.ts") || /Dx/u.test(reflection.name)) return "DX 分";
-    return "谱面索引";
-  }
-
-  return null;
 }
 
 /**
@@ -311,26 +365,6 @@ function inferPackageFromChildren(children) {
 }
 
 /**
- * @param {string} name
- * @returns {string | null}
- */
-function packageNameFromModule(name) {
-  const m = /^@mai-kit\/([^/]+)$/.exec(name);
-  return m ? m[1] : null;
-}
-
-/**
- * @param {string | undefined} fileName
- * @returns {string | null}
- */
-function packageNameFromSource(fileName) {
-  if (!fileName) return null;
-  const file = fileName.replace(/\\/g, "/");
-  const m = /(?:^|\/)packages\/([^/]+)\//.exec(file);
-  return m ? m[1] : null;
-}
-
-/**
  * @param {import("typedoc").ProjectReflection} project
  * @param {import("typedoc").ContainerReflection} container
  * @param {string | null} modulePackage
@@ -340,16 +374,14 @@ function slimContainer(project, container, modulePackage) {
 
   if (container.children?.length) {
     for (const child of [...container.children]) {
-      if (shouldDrop(child, modulePackage)) {
+      if (shouldDropReflection(child, modulePackage)) {
         project.removeReflection(child);
         continue;
       }
-      // 类/接口成员：去掉继承属性与方法
       slimContainer(project, child, modulePackage);
     }
   }
 
-  // 去掉删光后的空分组，避免「## 枚举」空表、「#### 属性」空壳
   pruneEmptyGroups(container);
 }
 
@@ -392,23 +424,4 @@ function pruneEmptyGroups(container) {
     container.categories = container.categories.filter((c) => c.children.length > 0);
     if (container.categories.length === 0) delete container.categories;
   }
-}
-
-/**
- * @param {import("typedoc").Reflection} child
- * @param {string | null} modulePackage
- */
-function shouldDrop(child, modulePackage) {
-  // DeclarationReflection 字段在运行时存在；用可选链避免强制断言
-  const flags = "flags" in child ? child.flags : undefined;
-  const inheritedFrom = "inheritedFrom" in child ? child.inheritedFrom : undefined;
-  const sources = "sources" in child ? child.sources : undefined;
-
-  if (flags?.isInherited || inheritedFrom) return true;
-  if (modulePackage && Array.isArray(sources) && sources.length > 0) {
-    const srcPkg = packageNameFromSource(sources[0]?.fileName);
-    if (srcPkg && srcPkg !== modulePackage) return true;
-  }
-
-  return false;
 }

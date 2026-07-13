@@ -1,7 +1,7 @@
 import type { ChartTag, ChartTagGroup, ChartTagQuery, SongType } from "./models";
 import { MaimaiDatabaseError } from "./error";
 
-/** @hidden 上游快照地址（构建/同步脚本用） */
+/** @internal 上游快照地址（构建/同步脚本用；不从包根导出） */
 export const DXRATING_TAGS_SOURCE_URL = "https://miruku.dxrating.net/api/v1/tags";
 
 interface ChartTagSnapshotChart {
@@ -22,19 +22,19 @@ interface ChartTagSnapshot {
 let snapshotPromise: Promise<ChartTagSnapshot> | undefined;
 let chartTagIndexPromise: Promise<Map<string, ChartTag[]>> | undefined;
 
-/** @hidden 包内 DXRating 标签快照 URL（Web bundler 需保留 database/data）。 */
+/** @internal 包内 DXRating 标签快照 URL（Web bundler 需保留 database/data）。 */
 export function getChartTagSnapshotUrl(): URL {
   return new URL("../data/dxrating-tags.json", import.meta.url);
 }
 
-/** @hidden 读取完整的本地标签快照（适配器内部）。 */
+/** @internal 读取完整的本地标签快照（适配器内部；不从包根导出）。 */
 export async function getChartTagSnapshot(): Promise<ChartTagSnapshot> {
   snapshotPromise ??= loadSnapshot();
   return snapshotPromise;
 }
 
 /**
- * @hidden 适配器内部读本地标签快照；用户侧用 `MaimaiDatabase.getChartTags`。
+ * @internal 适配器内部读本地标签快照；用户侧用 `MaimaiDatabase.getChartTags`。
  *
  * 关联键严格使用曲名 + 谱面类型 + 难度索引，不做模糊匹配或降级猜测。
  */

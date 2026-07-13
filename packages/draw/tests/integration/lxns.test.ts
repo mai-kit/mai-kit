@@ -1,26 +1,35 @@
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { test } from "node:test";
+import { rankBestsUpgradeCandidates } from "@mai-kit/analysis";
 import { LxnsMaimaiDatabase, MemoryCacheStore } from "@mai-kit/database";
-import { BEST_HEIGHT, BEST_WIDTH, Draw, POSTER_HEIGHT, POSTER_WIDTH } from "@mai-kit/draw";
+import {
+  BEST_HEIGHT,
+  BEST_WIDTH,
+  buildPosterData,
+  Draw,
+  POSTER_HEIGHT,
+  POSTER_WIDTH,
+} from "@mai-kit/draw";
 import { createLxnsClient } from "@mai-kit/prober";
+import { buildSongLevelMap, scoreMapKey } from "@mai-kit/utils/song";
 
 /**
- * 集成冒烟：prober（玩家 B50）+ database（曲目物量 / 素材）+ draw（海报）。
+ * 集成冒烟：prober + database + draw 全部版式。
  *
- * - 玩家：`@mai-kit/prober` personal token → profile + bests
- * - 静态数据 / 素材：`@mai-kit/database`（标签 + 曲目 notes；dx_max 由 draw 内部算）
- * - 渲染：海报 + Best50 / Best15 / Best35（均为 16:9）
+ * - 玩家：profile / bests / 全量 scores
+ * - 加分：全曲 + 定数 + **真实 bests 地板**，`rankBestsUpgradeCandidates`（能抬 B15/B35）
  *
  * 令牌：`LXNS_API_PERSONAL_ACCESS_TOKEN`（仓库根 `.env`）。
  * 运行：`pnpm --filter @mai-kit/draw test:integration:lxns`。
- * 未设置时 skip。
  */
 
 const token = process.env.LXNS_API_PERSONAL_ACCESS_TOKEN;
 const hasToken = typeof token === "string" && token.length > 0;
 const outputScale = 2;
 const minPngBytes = 10_000;
+/** 加分目标：至少 SSS+（与 analysis `minRate` 一致） */
+const minRate = "sssp" as const;
 
 /** PNG IHDR 宽高（大端 uint32，偏移 16 / 20） */
 function pngDimensions(png: Uint8Array): { width: number; height: number } {
@@ -72,10 +81,14 @@ void test(
     });
     const me = createLxnsClient({ personalAccessToken: token }).me();
 
-    const [profile, bests] = await Promise.all([me.getProfile(), me.getBests()]);
-
-    const renderer = await new Draw({ database }).withPlayer(profile, bests);
-    const { data } = renderer;
+    const [profile, bests, allScores, songList] = await Promise.all([
+      me.getProfile(),
+      me.getBests(),
+      me.getScores(),
+      database.getSongList({ notes: true }),
+    ]);
+    const draw = new Draw({ database });
+    const data = await buildPosterData(profile, bests, database);
 
     const withMax = data.charts.filter((c) => c.dx_max != null).length;
     assert.ok(withMax > 0, `应有 dx_max（实际 ${withMax}/${data.charts.length}）`);
@@ -85,52 +98,113 @@ void test(
     assert.equal(data.charts.length, 50, "真实 B50 应包含 50 张成绩卡");
     assert.equal(data.charts.slice(0, 15).length, 15, "B15 应有 15 张卡");
     assert.equal(data.charts.slice(15, 50).length, 35, "B35 应有 35 张卡");
+    assert.ok(allScores.length > 50, `全曲成绩应多于 B50（实际 ${allScores.length}）`);
 
+    const player = {
+      name: profile.name,
+      rating: profile.rating,
+      course_rank: profile.course_rank,
+      class_rank: profile.class_rank,
+      icon: profile.icon,
+      upload_time: profile.upload_time,
+    };
     const footers = {
       scale: outputScale,
       footerLeft: "maimai.lxns.net",
       footerRight: "Designed by Amatsuka",
     };
-    const jobs = [
-      {
-        name: "poster" as const,
-        file: "lxns.png",
-        width: POSTER_WIDTH * outputScale,
-        height: POSTER_HEIGHT * outputScale,
-      },
-      {
-        name: "best50" as const,
-        file: "lxns-best50.png",
-        width: BEST_WIDTH * outputScale,
-        height: BEST_HEIGHT * outputScale,
-      },
-      {
-        name: "best15" as const,
-        file: "lxns-best15.png",
-        width: BEST_WIDTH * outputScale,
-        height: BEST_HEIGHT * outputScale,
-      },
-      {
-        name: "best35" as const,
-        file: "lxns-best35.png",
-        width: BEST_WIDTH * outputScale,
-        height: BEST_HEIGHT * outputScale,
-      },
-    ];
+    const boardSize = Draw.getBoardSize(outputScale);
+
+    // 单曲卡：取 B50 第 1 首（已有 dx_max / level_value）
+    const topChart = data.charts[0];
+    assert.ok(topChart, "B50 至少应有一首成绩");
+
+    // 加分板：全曲 + 定数，按能否抬 B15/B35 排序（不是单曲随便抬达成率）
+    const levelMap = buildSongLevelMap(songList.songs);
+    const songVersion = new Map(songList.songs.map((song) => [song.id, song.version]));
+    const currentVersion = Math.max(0, ...songList.songs.map((song) => song.version));
+    const isNewSong = (score: { id: number }) =>
+      (songVersion.get(score.id) ?? 0) === currentVersion;
+
+    const upgradeEntries = allScores.flatMap((score) => {
+      const levelValue = levelMap.get(scoreMapKey(score));
+      if (levelValue == null) return [];
+      return [{ score, levelValue }];
+    });
+    assert.ok(
+      upgradeEntries.length > 50,
+      `加分候选池应覆盖全曲有定数成绩（实际 ${upgradeEntries.length}）`,
+    );
+    const ranked = rankBestsUpgradeCandidates(upgradeEntries, {
+      currentBests: bests,
+      isNewSong,
+      minRate,
+      limit: 10,
+    });
+    assert.ok(
+      ranked.every((item) => item.targetRate === minRate),
+      "候选目标评级应与 minRate 一致",
+    );
+    assert.ok(ranked.length > 0, "应至少有一首能抬 B50 的加分候选");
 
     const output = new URL("../../output/", import.meta.url);
     mkdirSync(output, { recursive: true });
-    await Promise.all(
-      jobs.map(async ({ name, file, width, height }) => {
-        await writeRenderedPng(
-          name,
-          file,
-          width,
-          height,
-          async () => await renderer.render(name, footers),
-          output,
-        );
-      }),
-    );
+
+    await Promise.all([
+      writeRenderedPng(
+        "poster",
+        "lxns.png",
+        POSTER_WIDTH * outputScale,
+        POSTER_HEIGHT * outputScale,
+        async () => draw.poster(profile, bests, footers),
+        output,
+      ),
+      writeRenderedPng(
+        "best50",
+        "lxns-best50.png",
+        BEST_WIDTH * outputScale,
+        BEST_HEIGHT * outputScale,
+        async () => draw.best50(player, bests, footers),
+        output,
+      ),
+      writeRenderedPng(
+        "best15",
+        "lxns-best15.png",
+        BEST_WIDTH * outputScale,
+        BEST_HEIGHT * outputScale,
+        async () => draw.best15(player, bests, footers),
+        output,
+      ),
+      writeRenderedPng(
+        "best35",
+        "lxns-best35.png",
+        BEST_WIDTH * outputScale,
+        BEST_HEIGHT * outputScale,
+        async () => draw.best35(player, bests, footers),
+        output,
+      ),
+      writeRenderedPng(
+        "chart",
+        "lxns-chart.png",
+        boardSize.width,
+        boardSize.height,
+        async () => draw.chart(topChart, footers),
+        output,
+      ),
+      writeRenderedPng(
+        "upgrades",
+        "lxns-upgrades.png",
+        boardSize.width,
+        boardSize.height,
+        async () =>
+          draw.upgrades(
+            {
+              candidates: ranked,
+            },
+            footers,
+          ),
+        output,
+      ),
+    ]);
   },
 );

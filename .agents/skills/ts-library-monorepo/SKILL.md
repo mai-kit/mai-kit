@@ -1,6 +1,6 @@
 ---
 name: ts-library-monorepo
-description: Scaffold and configure a modern TypeScript library monorepo — pnpm workspaces + tsdown (rolldown) build + tsc --noEmit build-first typecheck + oxlint/oxfmt + ESM packages. Use this skill whenever the user wants to create, bootstrap, or set up a new TS monorepo, add a package to an existing monorepo, configure monorepo build/typecheck/lint tooling, or asks about monorepo architecture choices (project references vs build-first, tsup vs tsdown, nodenext vs bundler, where to put @types/node, sourcemap/hash/fixedExtension, etc.). Also trigger when the user mentions pnpm workspace, tsdown, library monorepo, publishing ESM packages, or wants a modern TS toolchain. Even if they just say "set up a new project" or "add a package" in a TS context, prefer this skill.
+description: Scaffold and configure a modern TypeScript library monorepo — pnpm workspaces + tsdown (rolldown) build + tsc --noEmit build-first typecheck + oxlint/oxfmt + ESM packages. Use this skill whenever the user wants to create, bootstrap, or set up a new TS monorepo, add a package to an existing monorepo, configure monorepo build/typecheck/lint tooling, or asks about monorepo architecture choices (project references vs build-first, tsup vs tsdown, nodenext vs bundler, where to put @types/node, sourcemap/hash/fixedExtension, etc.). Also trigger when the user mentions pnpm workspace, tsdown, library monorepo, publishing ESM packages, or wants a modern TS toolchain. Even if they just say "set up a new project" or "add a package" in a TS context, prefer this skill. In this mai-kit monorepo, also use for adapter packages, package-level vs adapter errors, NotImplemented errors, public API surface narrowing, and TypeDoc rules (no private/internal in docs).
 ---
 
 # Modern TypeScript Library Monorepo
@@ -275,6 +275,118 @@ dist
 
 ---
 
+## Adapter-style packages & error layering (mai-kit)
+
+When a package exposes a **generic interface** and multiple **data-source adapters** (this monorepo: `@mai-kit/database`, `@mai-kit/prober`), follow the layout and error rules below. Full project rules live in repo-root **`AGENTS.md`**.
+
+### Package layout
+
+```
+packages/<name>/
+├── src/
+│   ├── index.ts           # public exports
+│   ├── error.ts           # package-level errors (base + NotImplemented + guards)
+│   ├── models.ts          # generic models / interfaces
+│   └── adapters/<source>/ # concrete adapter only
+│       ├── error.ts       # adapter-specific errors extending package base
+│       └── …
+```
+
+- Generic interface + models stay at package root; **never** put LXNS/Diving-Fish-only fields on the generic model.
+- Adapters implement the interface; document source-specific APIs only under `adapters/<name>/` and README adapter sections.
+
+### Error hierarchy (hard rule)
+
+```
+MaiKitError                              # @mai-kit/shared
+  └─ <Package>Error                      # src/error.ts — HTTP / auth / business / cache
+       ├─ <Package>NotImplementedError   # src/error.ts — capability missing (source-agnostic)
+       └─ <Adapter>Error                 # adapters/<name>/error.ts — that source's failures
+```
+
+| Kind | Where | Throw when | Guard |
+|------|--------|------------|--------|
+| Package base | `src/error.ts` | Request/processing failed | `is<Package>Error` |
+| **Package NotImplemented** | `src/error.ts` | Generic method **must** exist on the interface, but this adapter's upstream has **no equivalent** | `is<Package>NotImplementedError` |
+| Adapter-specific | `adapters/<name>/error.ts` | Failures of that data source only | `isLxns*` / `isDivingFish*` etc. |
+
+### NotImplemented rules (must follow)
+
+1. **Define once at package root** — e.g. `MaimaiDatabaseNotImplementedError`, `ProberNotImplementedError` — with `method`, optional `adapter` (display string only), `is*NotImplementedError`, inherit package base error.
+2. **Adapters reuse the package class** — do **not** invent local `unsupported()` that throws `DivingFishDatabaseError` / `LxnsProberError` for “method not available”.
+3. **Keep it distinguishable from HTTP/business failures** — `isDivingFishDatabaseError(notImplemented)` must be **false** so callers can degrade/switch source via `is*NotImplementedError` and treat network errors separately.
+4. **Prefer type narrowing** — conditional clients / `*Capability` so unsupported methods are **absent from the type**. Only throw NotImplemented when the interface forces a stub (e.g. full `MaimaiDatabase` with no alias API).
+5. **Normalize real failures to package/adapter errors** — never leak raw `fetch` exceptions without wrapping (keep `cause` if useful).
+
+```ts
+// ✅ package-level NotImplemented from an adapter
+throw new MaimaiDatabaseNotImplementedError({
+  method: "getAliasList",
+  adapter: "Diving-Fish",
+});
+
+// ❌ do not mark “unimplemented” as an adapter HTTP/business error
+throw new DivingFishDatabaseError({
+  message: "Diving-Fish does not support getAliasList",
+});
+```
+
+### Catch order (callers)
+
+1. `is*NotImplementedError` → missing capability (swap source / skip)
+2. `is<Adapter>Error` → that data source failed
+3. `is<Package>Error` → any package error
+4. `isMaiKitError` → any mai-kit package
+
+When adding a new adapter or a new generic method the source cannot support: throw the **package** NotImplemented error; update README error section; do not add a parallel adapter-only “unsupported” type.
+
+### No redundant API parameters (hard rule)
+
+Public DTOs and functions must not make callers (or intermediate builders) write the **same fact twice**.
+
+| Avoid | Prefer |
+|-------|--------|
+| Required derived fields that duplicate source data (e.g. both full `charts` and mandatory `ratingDistribution`) | Compute distributions at use/render time from `charts` |
+| Two parallel stats bags (`summary` + always-filled `personalMetrics` with overlapping numbers) | One aggregate bag; optional **full override** only |
+| Twin APIs with identical behavior (`foo` + `fooAlias`) | One name; document use cases in JSDoc |
+| Requiring data URI **and** path **and** remote fetch for the same asset | Optional fallback chain (URI → path → fetch) |
+
+**Source of truth first.** Example (mai-kit draw `PosterData`): authority = `player` / `charts` / `summary` / `radar`; donut/bar metrics derived at render; `personalMetrics` only as optional wholesale override.
+
+Before adding a parameter: *can this be derived from existing inputs?* If yes, do not add it.
+
+### Public API surface & TypeDoc (hard rule)
+
+**Goal:** `import` surface and the generated API site show only **stable, necessary** exports. Adapter helpers, private methods, and build-only symbols stay out of both package root exports and docs.
+
+| Rule | Detail |
+|------|--------|
+| **Package root `index` = sole public surface** | TypeDoc `entryPoints` follow each package `src/index.ts` (or multi-entry `exports`). Anything not re-exported from there is internal. |
+| **private / protected never in docs** | TypeDoc: `excludePrivate` + `excludeProtected` = `true`. Class privates (e.g. `loadAssets`) must not appear on API pages. |
+| **`@internal` never in docs** | `excludeInternal` = `true`. Use `@internal` for convenience re-exports and build helpers—not a vague “hidden” comment alone. |
+| **Adapter helpers default private to the package** | Do **not** export `mapXxx*`, snapshot loaders, cover-id helpers from package root. Users use `createXxxClient` / interface methods on the adapter class. |
+| **Do not widen exports for tests** | Tests may import `../src/adapters/...` or exercise public APIs only. Never `export` something only so `@scope/pkg` can import it in tests. |
+| **Advanced exports must be labeled** | If something must stay public (e.g. layout components), mark `@beta` and note “advanced / may change” in README. |
+
+```ts
+// ❌ adapter map on package root
+export { mapDivingFishRecord } from "./adapters/diving-fish/mappers";
+
+// ✅ user-facing path only
+export { createDivingFishClient } from "./adapters/diving-fish";
+
+// ❌ export getLocalChartTags so tests can import from package name
+// ✅ test via database.getChartTags() or import "../src/chart-tags.ts"
+```
+
+After changing public exports or visibility, run `pnpm docs:build` (includes generated-api checks that private members / unexported helpers must not appear in API markdown).
+
+Full project wording: repo-root **`AGENTS.md`** →「公开面收窄与 API 文档」.
+
+---
+
 ## Reference
 
 This architecture is aligned to **Vercel's `vercel/chat` SDK** (pnpm + turbo + tsup + `tsc --noEmit` + `typecheck dependsOn: ^build` + `moduleResolution: bundler` + per-package build config + no project references). The differences from Vercel's setup, by choice: tsdown instead of tsup; `pnpm -r` instead of turbo (for small monorepos); `@types/node` declared per-package only where node APIs are used.
+
+For **mai-kit domain boundaries, docs vs adapters, and delivery gates**, always also read repo-root **`AGENTS.md`**.

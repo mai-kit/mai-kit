@@ -5,7 +5,7 @@
  *
  * {@link ProberPlayer}、`PlayerProfile`、`Score` 和 `Bests` 不依赖具体查分服务。
  * LXNS 与 Diving-Fish 适配把各自的 API 响应转换为这些类型，得到的 `profile` 和
- * `bests` 都可以传给 `Draw.withPlayer()`。
+ * `bests` 都可以传给 `Draw.poster()`。
  *
  * ## 查询玩家数据
  *
@@ -15,7 +15,7 @@
  *   player.getProfile(),
  *   player.getBests(),
  * ]);
- * // → Draw.withPlayer(profile, bests)
+ * // → Draw.poster(profile, bests)
  * ```
  *
  * ## 内置适配
@@ -33,17 +33,23 @@
  *
  * ## 错误处理
  *
+ * - {@link ProberError}：鉴权 / HTTP / 业务失败
+ * - {@link ProberNotImplementedError}：适配无法实现某能力（包级，供实现复用）
+ * - 适配子类：`LxnsProberError` / `DivingFishProberError`
+ *
  * ```ts
  * import {
  *   isDivingFishProberError,
  *   isLxnsProberError,
  *   isProberError,
+ *   isProberNotImplementedError,
  * } from "@mai-kit/prober";
  *
  * try {
  *   await player.getBests();
  * } catch (error) {
- *   if (isLxnsProberError(error)) console.error("LXNS", error.status);
+ *   if (isProberNotImplementedError(error)) console.error("unsupported", error.method);
+ *   else if (isLxnsProberError(error)) console.error("LXNS", error.status);
  *   else if (isDivingFishProberError(error)) console.error("Diving-Fish", error.status);
  *   else if (isProberError(error)) console.error("prober", error.message);
  *   else throw error;
@@ -56,5 +62,6 @@
 export * from "./models";
 export * from "./prober-player";
 export * from "./error";
+export type { HttpResilienceOptions } from "@mai-kit/shared";
 export * from "./adapters/lxns/index";
 export * from "./adapters/diving-fish/index";

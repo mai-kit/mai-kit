@@ -101,6 +101,9 @@ importers:
         specifier: ^0.12.2
         version: 0.12.2
     devDependencies:
+      '@mai-kit/analysis':
+        specifier: workspace:*
+        version: link:../analysis
       '@mai-kit/database':
         specifier: workspace:*
         version: link:../database
@@ -121,7 +124,11 @@ importers:
         specifier: ^24.5.1
         version: 24.13.2
 
-  packages/shared: {}
+  packages/shared:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.5.1
+        version: 24.13.2
 
   packages/utils:
     dependencies:

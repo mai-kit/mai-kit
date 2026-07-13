@@ -1,7 +1,7 @@
 {
   "name": "@mai-kit/shared",
   "version": "0.1.0",
-  "description": "mai-kit 各包共享的错误基类与领域类型。",
+  "description": "mai-kit 各包共享的错误基类、领域类型与无业务 HTTP 工具。",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -22,7 +22,12 @@
     "dev": "tsdown --watch",
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "pnpm run build && pnpm run test:unit",
+    "test:unit": "node --test tests/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.1"
   },
   "license": "MIT",
   "repository": {

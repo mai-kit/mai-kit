@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { LevelIndex } from "@mai-kit/prober";
 import type { Bests, PlayerProfile, Score } from "@mai-kit/prober";
-import { Draw, DrawError } from "@mai-kit/draw";
-import type { ChartTag, DrawSource } from "@mai-kit/draw";
+import { buildPosterData, Draw, DrawError } from "@mai-kit/draw";
+import type { ChartTag, PosterDataSource } from "@mai-kit/draw";
 
 const player: PlayerProfile = {
   name: "Radar Tester",
@@ -42,11 +42,8 @@ const tags: ChartTag[] = [
   { id: 4, localized_name: { "zh-Hans": "旧框" }, group_id: 2 },
 ];
 
-void test("Draw.withPlayer creates a renderer with radar axes derived from chart tags", async () => {
-  const source: DrawSource = {
-    async getAsset() {
-      return new Uint8Array();
-    },
+void test("buildPosterData derives radar axes from chart tags", async () => {
+  const source: PosterDataSource = {
     async getChartTags() {
       return [
         [tags[0], tags[1], tags[3]],
@@ -59,26 +56,38 @@ void test("Draw.withPlayer creates a renderer with radar axes derived from chart
     },
   };
 
-  const renderer = await new Draw({ database: source }).withPlayer(player, bests);
-  assert.deepEqual(renderer.data.radar, [
+  const data = await buildPosterData(player, bests, source);
+  assert.deepEqual(data.radar, [
     { label: "读谱", value: 100, displayValue: 4 },
     { label: "体力", value: 75, displayValue: 3 },
     { label: "纵连", value: 75, displayValue: 3 },
   ]);
 });
 
-void test("Draw.withPlayer rejects insufficient radar data instead of inventing axes", async () => {
-  const source: DrawSource = {
-    async getAsset() {
-      return new Uint8Array();
-    },
+void test("buildPosterData rejects insufficient radar data instead of inventing axes", async () => {
+  const source: PosterDataSource = {
     async getChartTags(charts) {
       return charts.map(() => [tags[0]]);
     },
   };
 
   await assert.rejects(
-    new Draw({ database: source }).withPlayer(player, bests),
+    buildPosterData(player, bests, source),
     (error: unknown) => error instanceof DrawError && /insufficient/.test(error.message),
+  );
+});
+
+void test("poster(profile, bests) requires chart tags but other layouts do not", async () => {
+  const draw = new Draw({
+    database: {
+      async getAsset() {
+        return new Uint8Array();
+      },
+    },
+  });
+
+  await assert.rejects(
+    draw.posterSvg(player, bests),
+    (error: unknown) => error instanceof DrawError && /getChartTags/u.test(error.message),
   );
 });

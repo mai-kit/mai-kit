@@ -3,10 +3,21 @@ import { svgDataUri } from "../encoding";
 import { H, W } from "./theme";
 
 const styles = {
-  bg: { position: "absolute", inset: 0, display: "flex" },
+  // 必须有实色底：satori 对 backgroundImage 支持有限，透明会透出成黑/棋盘
+  bg: {
+    position: "absolute",
+    inset: 0,
+    display: "flex",
+    width: W,
+    height: H,
+    backgroundColor: "#f7f4ff",
+  },
   bgWash: {
     position: "absolute",
     inset: 0,
+    width: W,
+    height: H,
+    backgroundColor: "#f1ebff",
     backgroundImage: "linear-gradient(135deg, #fbf9ff 0%, #f1ebff 47%, #fff6fb 100%)",
   },
   bgSlashOne: {

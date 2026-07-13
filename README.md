@@ -34,11 +34,11 @@ const player = createLxnsClient({
 }).me();
 
 const [profile, bests] = await Promise.all([player.getProfile(), player.getBests()]);
-const draw = await new Draw({
+const draw = new Draw({
   database: new LxnsMaimaiDatabase(),
-}).withPlayer(profile, bests);
+});
 
-await writeFile("poster.png", await draw.render("poster"));
+await writeFile("poster.png", await draw.poster(profile, bests));
 ```
 
 ## 文档

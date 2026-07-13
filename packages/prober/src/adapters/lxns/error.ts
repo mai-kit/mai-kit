@@ -6,7 +6,7 @@ import { ProberError, type ProberErrorInit } from "../../error";
  * 调用方可用 {@link isLxnsProberError} 区分数据源；
  * 也可用 {@link isProberError} / `isMaiKitError` 做更宽捕获。
  *
- * @see isLxnsProberError
+ * @see {@link isLxnsProberError}
  */
 export class LxnsProberError extends ProberError {
   /**

@@ -19,6 +19,9 @@ import type {
   SongList,
 } from "../../models";
 import { getLocalChartTags } from "../../chart-tags";
+import { MaimaiDatabaseNotImplementedError } from "../../error";
+import { fetchWithResilience, RequestCoalescer, type HttpResilienceOptions } from "@mai-kit/shared";
+import { mapDivingFishChartStats, type DivingFishChartStats } from "./chart-stats";
 import { DivingFishDatabaseError } from "./error";
 import {
   divingFishCoverId,
@@ -33,13 +36,13 @@ export const DIVING_FISH_DEFAULT_BASE_URL = "https://www.diving-fish.com/api/mai
 export const DIVING_FISH_DEFAULT_COVER_BASE_URL = "https://www.diving-fish.com/covers/";
 
 /** {@link DivingFishMaimaiDatabase} 构造选项 */
-export interface DivingFishMaimaiDatabaseOptions {
+export interface DivingFishMaimaiDatabaseOptions extends HttpResilienceOptions {
   /** 曲目 API 根，默认 {@link DIVING_FISH_DEFAULT_BASE_URL} */
   baseURL?: string;
   /** 封面 CDN 根，默认 {@link DIVING_FISH_DEFAULT_COVER_BASE_URL} */
   coverBaseURL?: string;
   /**
-   * 可选缓存（`music_data` JSON 与 jacket 字节）。
+   * 可选缓存（`music_data`、`chart_stats` JSON 与 jacket 字节）。
    * 不传则不缓存。
    */
   cache?: DatabaseCacheOptions;
@@ -51,9 +54,10 @@ export interface DivingFishMaimaiDatabaseOptions {
  * | 能力 | 来源 |
  * |------|------|
  * | 曲目列表 / 单曲 | `GET /music_data` |
+ * | 社区成绩统计 | `GET /chart_stats`（适配专属） |
  * | 封面 jacket | `GET /covers/{id}.png` |
  * | 谱面标签 | 包内 DXRating 快照 |
- * | 别名 / 收藏品 | 无对等接口 → 抛 {@link DivingFishDatabaseError} |
+ * | 别名 / 收藏品 | 无对等接口 → 抛 {@link MaimaiDatabaseNotImplementedError} |
  *
  * @example
  * ```ts
@@ -66,15 +70,18 @@ export class DivingFishMaimaiDatabase implements MaimaiDatabase {
   private readonly baseURL: string;
   private readonly coverBaseURL: string;
   private readonly cache?: DatabaseCache;
+  private readonly resilience: HttpResilienceOptions;
+  private readonly coalescer = new RequestCoalescer();
   private songListCache?: Promise<SongList>;
 
   /**
-   * @param options - 可选 API/CDN 根与缓存
+   * @param options - 可选 API/CDN 根、缓存、timeout / retries
    */
   constructor(options: DivingFishMaimaiDatabaseOptions = {}) {
     this.baseURL = options.baseURL ?? DIVING_FISH_DEFAULT_BASE_URL;
     this.coverBaseURL = options.coverBaseURL ?? DIVING_FISH_DEFAULT_COVER_BASE_URL;
     this.cache = options.cache ? new DatabaseCache(options.cache) : undefined;
+    this.resilience = { timeoutMs: options.timeoutMs, retries: options.retries };
   }
 
   /**
@@ -130,33 +137,58 @@ export class DivingFishMaimaiDatabase implements MaimaiDatabase {
   }
 
   /**
+   * 获取水鱼社区成绩统计。
+   *
+   * 这是水鱼适配专属能力，不属于通用 {@link MaimaiDatabase}。`charts` 以曲目 id 为键，
+   * 每项数组下标对应难度索引；没有统计的谱面为 `null`。
+   *
+   * @returns 谱面相对难度、平均达成率、评级与 FC 分布
+   * @throws {DivingFishDatabaseError} 网络、HTTP 或响应结构错误
+   *
+   * @example
+   * ```ts
+   * const stats = await db.getChartStats();
+   * const master = stats.charts["11451"]?.[3];
+   * console.log(master?.fit_diff);
+   * ```
+   */
+  async getChartStats(): Promise<DivingFishChartStats> {
+    const load = async () => {
+      const body = await this.fetchJson("chart_stats");
+      return mapDivingFishChartStats(body);
+    };
+    if (this.cache) return this.cache.json("df-chart-stats", load);
+    return load();
+  }
+
+  /**
    * @param _songId - 忽略
    * @returns 从不返回
-   * @throws {DivingFishDatabaseError} 水鱼无对等接口
+   * @throws {MaimaiDatabaseNotImplementedError} 水鱼无对等接口
    */
   async getSongCollections(_songId: number): Promise<SongCollection[]> {
-    throw unsupported("getSongCollections");
+    throw notImplemented("getSongCollections");
   }
 
   /**
    * @returns 从不返回
-   * @throws {DivingFishDatabaseError} 水鱼无对等接口
+   * @throws {MaimaiDatabaseNotImplementedError} 水鱼无对等接口
    */
   async getAliasList(): Promise<Alias[]> {
-    throw unsupported("getAliasList");
+    throw notImplemented("getAliasList");
   }
 
   /**
    * @param _type - 忽略
    * @param _query - 忽略
    * @returns 从不返回
-   * @throws {DivingFishDatabaseError} 水鱼无对等接口
+   * @throws {MaimaiDatabaseNotImplementedError} 水鱼无对等接口
    */
   async getCollectionList(
     _type: CollectionType,
     _query?: CollectionListQuery,
   ): Promise<Collection[]> {
-    throw unsupported("getCollectionList");
+    throw notImplemented("getCollectionList");
   }
 
   /**
@@ -164,33 +196,33 @@ export class DivingFishMaimaiDatabase implements MaimaiDatabase {
    * @param _id - 忽略
    * @param _query - 忽略
    * @returns 从不返回
-   * @throws {DivingFishDatabaseError} 水鱼无对等接口
+   * @throws {MaimaiDatabaseNotImplementedError} 水鱼无对等接口
    */
   async getCollectionInfo(
     _type: CollectionType,
     _id: number,
     _query?: VersionQuery,
   ): Promise<Collection> {
-    throw unsupported("getCollectionInfo");
+    throw notImplemented("getCollectionInfo");
   }
 
   /**
    * @param _query - 忽略
    * @returns 从不返回
-   * @throws {DivingFishDatabaseError} 水鱼无对等接口
+   * @throws {MaimaiDatabaseNotImplementedError} 水鱼无对等接口
    */
   async getCollectionGenreList(_query?: VersionQuery): Promise<CollectionGenre[]> {
-    throw unsupported("getCollectionGenreList");
+    throw notImplemented("getCollectionGenreList");
   }
 
   /**
    * @param _id - 忽略
    * @param _query - 忽略
    * @returns 从不返回
-   * @throws {DivingFishDatabaseError} 水鱼无对等接口
+   * @throws {MaimaiDatabaseNotImplementedError} 水鱼无对等接口
    */
   async getCollectionGenreInfo(_id: number, _query?: VersionQuery): Promise<CollectionGenre> {
-    throw unsupported("getCollectionGenreInfo");
+    throw notImplemented("getCollectionGenreInfo");
   }
 
   /**
@@ -199,37 +231,41 @@ export class DivingFishMaimaiDatabase implements MaimaiDatabase {
    * @param type - 素材类型；仅 `"jacket"` 有效
    * @param id - 曲目 id
    * @returns PNG 等原始字节
-   * @throws {DivingFishDatabaseError} 类型不支持、HTTP 失败或网络错误
+   * @throws {MaimaiDatabaseNotImplementedError} 非 jacket 类型
+   * @throws {DivingFishDatabaseError} HTTP 失败或网络错误
    */
   async getAsset(type: AssetType, id: number): Promise<Uint8Array> {
     if (type !== "jacket") {
-      throw new DivingFishDatabaseError({
-        message: `Diving-Fish adapter only supports getAsset("jacket"); got "${type}"`,
+      throw new MaimaiDatabaseNotImplementedError({
+        method: "getAsset",
+        adapter: "Diving-Fish",
+        message: `Diving-Fish only implements getAsset("jacket"); got "${type}"`,
       });
     }
     const coverId = divingFishCoverId(id);
     const url = new URL(`${coverId}.png`, this.coverBaseURL);
-    const load = async () => {
-      let response: Response;
-      try {
-        response = await fetch(url);
-      } catch (error) {
-        throw new DivingFishDatabaseError({
-          message: `Diving-Fish cover fetch failed: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-          cause: error,
-        });
-      }
-      if (!response.ok) {
-        throw new DivingFishDatabaseError({
-          message: `Diving-Fish cover HTTP ${response.status} for ${coverId}`,
-          status: response.status,
-          code: response.status,
-        });
-      }
-      return new Uint8Array(await response.arrayBuffer());
-    };
+    const load = async () =>
+      this.coalescer.run(`GET ${url.href}`, async () => {
+        let response: Response;
+        try {
+          response = await fetchWithResilience(url, undefined, this.resilience);
+        } catch (error) {
+          throw new DivingFishDatabaseError({
+            message: `Diving-Fish cover fetch failed: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            cause: error,
+          });
+        }
+        if (!response.ok) {
+          throw new DivingFishDatabaseError({
+            message: `Diving-Fish cover HTTP ${response.status} for ${coverId}`,
+            status: response.status,
+            code: response.status,
+          });
+        }
+        return new Uint8Array(await response.arrayBuffer());
+      });
     if (this.cache) {
       return this.cache.bytes(`df-cover:${coverId}`, load);
     }
@@ -241,40 +277,49 @@ export class DivingFishMaimaiDatabase implements MaimaiDatabase {
    * @throws {DivingFishDatabaseError} 网络、HTTP 或非数组响应
    */
   private async fetchMusicData(): Promise<DivingFishMusicEntry[]> {
-    const url = new URL("music_data", this.baseURL);
-    let response: Response;
-    try {
-      response = await fetch(url, { headers: { Accept: "application/json" } });
-    } catch (error) {
-      throw new DivingFishDatabaseError({
-        message: `Diving-Fish music_data request failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-        cause: error,
-      });
-    }
-    if (!response.ok) {
-      throw new DivingFishDatabaseError({
-        message: `Diving-Fish music_data HTTP ${response.status}`,
-        status: response.status,
-        code: response.status,
-      });
-    }
-    const body: unknown = await response.json();
+    const body = await this.fetchJson("music_data");
     if (!Array.isArray(body)) {
       throw new DivingFishDatabaseError({ message: "Diving-Fish music_data: expected array" });
     }
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     return body as DivingFishMusicEntry[];
   }
+
+  /** @returns 指定公开端点的 JSON 响应 */
+  private async fetchJson(path: string): Promise<unknown> {
+    const url = new URL(path, this.baseURL);
+    return this.coalescer.run(`GET ${url.href}`, async () => {
+      let response: Response;
+      try {
+        response = await fetchWithResilience(
+          url,
+          { headers: { Accept: "application/json" } },
+          this.resilience,
+        );
+      } catch (error) {
+        throw new DivingFishDatabaseError({
+          message: `Diving-Fish ${path} request failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          cause: error,
+        });
+      }
+      if (!response.ok) {
+        throw new DivingFishDatabaseError({
+          message: `Diving-Fish ${path} HTTP ${response.status}`,
+          status: response.status,
+          code: response.status,
+        });
+      }
+      return response.json();
+    });
+  }
 }
 
 /**
- * @param method - 方法名
- * @returns 说明不支持的错误
+ * @param method - {@link MaimaiDatabase} 方法名
+ * @returns 包级未实现错误
  */
-function unsupported(method: string): DivingFishDatabaseError {
-  return new DivingFishDatabaseError({
-    message: `Diving-Fish adapter does not support MaimaiDatabase.${method}()`,
-  });
+function notImplemented(method: string): MaimaiDatabaseNotImplementedError {
+  return new MaimaiDatabaseNotImplementedError({ method, adapter: "Diving-Fish" });
 }

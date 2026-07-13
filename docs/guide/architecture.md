@@ -24,15 +24,16 @@ mai-kit 按数据来源和处理阶段拆包。只安装实际需要的部分；
 目前内置两个适配：
 
 - [落雪查分器（LXNS）](https://maimai.lxns.net/)：个人令牌 / 开发者令牌
-- [Diving-Fish（水鱼）](https://www.diving-fish.com/maimaidx/prober/)：公开 B50、Import-Token、Developer-Token
+- [Diving-Fish（水鱼）](https://www.diving-fish.com/maimaidx/prober/)：公开 B50 / Rating 排行、Import-Token、Developer-Token
 
-两种适配返回相同形态的 `profile` 和 `bests`，可以直接传给 `Draw.withPlayer()`。
+两种适配返回相同形态的 `profile` 和 `bests`，可以直接传给 `Draw.poster()`。
 
 ### `@mai-kit/database`
 
 读取曲目、定数、物量、谱面标签、封面和头像等非玩家数据。这些接口通常不需要玩家令牌。
 
-包内提供 LXNS 和 Diving-Fish 实现，也可以自行实现 `MaimaiDatabase`。渲染海报时，将数据源传入
+包内提供 LXNS 和 Diving-Fish 实现，也可以自行实现 `MaimaiDatabase`。水鱼适配另有社区谱面
+统计；这类数据源特有能力留在适配器上，不进入通用接口。渲染海报时，将数据源传入
 `new Draw({ database })`。
 
 ### `@mai-kit/draw`
@@ -40,15 +41,14 @@ mai-kit 按数据来源和处理阶段拆包。只安装实际需要的部分；
 把玩家数据与曲目、素材和谱面标签组合成 PNG 或 SVG：
 
 1. `new Draw({ database })` — `database` 提供素材 / 标签等能力
-2. `withPlayer(profile, bests)` 绑定一次
-3. 调用 `render()` 或 `renderSvg()` 生成不同版式
+2. 按产物调用扁平方法：`poster` / `best15` / `chart` / `upgrades` 等（末位共用 `RenderOptions`：`scale` / 页脚 / `fonts` / `assetFallback`）
 
 返回值是 `Uint8Array` 或 SVG 字符串；保存文件、上传和下载由应用处理。
 
 ### `@mai-kit/utils`
 
 提供达成率归一、单曲 Rating、DX 满分、DX 星级和判定计算。所有函数都没有 I/O，可在 Node 和浏览器中直接使用。
-`Draw.withPlayer()` 会根据曲目物量补齐 `dx_max`，生成海报前不需要调用方自行计算。
+`Draw.poster()` 等会根据曲目物量补齐 `dx_max`，生成海报前不需要调用方自行计算。
 
 - `@mai-kit/utils`：常用稳定公式
 - `@mai-kit/utils/judgement`：完整判定、规范化与判定计分
@@ -87,6 +87,10 @@ database 等来源准备。
 ## 错误处理
 
 prober、database 和 draw 分别定义自己的错误类型，并统一继承 `MaiKitError`。调用方既可以按包处理，
-也可以用 `isMaiKitError()` 捕获所有 mai-kit 错误。具体类型见 [API 参考](/api/)。
+也可以用 `isMaiKitError()` 捕获所有 mai-kit 错误。
+
+database / prober 还提供包级 **未实现** 错误（`MaimaiDatabaseNotImplementedError` /
+`ProberNotImplementedError`）：适配在「通用接口必须挂上、上游无对等能力」时抛出，便于与
+HTTP / 业务失败区分。具体类型见 [API 参考](/api/)。
 
 第三方来源与致谢见 [关于](./about)。
