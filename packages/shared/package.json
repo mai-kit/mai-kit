@@ -30,8 +30,5 @@
     "clean": "rm -rf dist",
     "test": "pnpm run build && pnpm run test:unit",
     "test:unit": "node --test tests/*.test.ts"
-  },
-  "devDependencies": {
-    "@types/node": "^24.5.1"
   }
 }

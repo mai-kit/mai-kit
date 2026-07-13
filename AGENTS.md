@@ -193,12 +193,12 @@ pnpm --filter @mai-kit/draw test:integration:lxns   # 真数据集成
 ### 架构硬规则（改工具链前必读）
 
 1. **tsdown 独占 `dist`**；`tsc` 只 `--noEmit`，禁止让 typecheck 写出文件。type-aware lint 同样依赖跨包 `dist/*.d.ts`，所以根 `lint` / `check` 必须 build-first，并在清空 `dist` 后仍能独立通过。
-2. **不用 TS Project References**（`composite` / `references`）；跨包类型走 `exports` → 已构建的 `dist/*.d.ts`。
+2. **不用 composite Project References 构建**：禁止给包间建立 `references` 依赖图或用 `tsc -b` / tsc emit 接管产物；跨包类型走 `exports` → 已构建的 `dist/*.d.ts`。允许根 `tsconfig.json` 使用 `files: []` + `references` 作为 **IDE solution 索引**，但叶子配置不启用 `composite`，构建脚本也不消费该引用图。
 3. JavaScript 基线固定为 **ES2023**：base `target` / `lib` 与每包 tsdown `target` 保持一致。
 4. **`moduleResolution: "bundler"`** + `module: "esnext"`；源码相对 import / export 不带扩展名。
 5. tsdown 开启 `exports: true`，由入口和产物自动生成各包 `package.json#exports`；`fixedExtension: false`（发布产物为 `.js` 不是 `.mjs`）、`hash: false`（稳定文件名）是必要 override。改配置后务必 build 并检查生成的 manifest 与 `dist/`。
 6. **不用 `paths` 指到源码**做跨包 typecheck；保持 build-first。
-7. `@types/node`：base `types: ["node"]`；**使用 Node API 的子包**在自身 `devDependencies` 声明。
+7. base 只使用语言标准类型（`lib: ["es2023"]`、`types: []`），**不得默认注入 DOM 或 Node 平台类型**。使用 Web API 的包在自身 tsconfig 显式加入 `dom` / `dom.iterable`；源码确实含 Node 专用实现的包再设置 `types: ["node"]`，并在 `devDependencies` 声明 `@types/node`。若只有 Node 单测，子包无需声明，由根 `@types/node` + `tsconfig.test.json` 统一检查；根 solution config 引用该测试配置，保证 IDE 正确归属而不污染生产源码。
 8. CI 先用 `actions/setup-node` 读取 `.node-version`，再由 `corepack enable pnpm` 根据根 `packageManager` 启用精确 pnpm 版本；不要再叠加自带旧 pnpm bootstrap 的 setup action。
 9. CI 的 `check` 只 build 一次；后续 typecheck/test/docs/Web smoke 必须复用该次 `dist`。本地易用命令保留 build-first，CI 走对应 `*:built` 入口。
 10. Release / Pages 只接受本仓库 `main` 的成功 `push` CI；特权 `workflow_run` 必须校验 event、branch、repository，并只消费已验证 SHA / artifact。
@@ -533,7 +533,7 @@ LXNS_API_PERSONAL_ACCESS_TOKEN=your_personal_token
 - 让 `database` 依赖 `prober` 或反过来
 - 让 `draw` 硬依赖完整 `MaimaiDatabase` 接口
 - 在 `shared` 塞查分/曲目适配或 LXNS/水鱼 URL 与业务错误
-- 用 tsc emit / project references / `paths` 绕过 build-first
+- 用 tsc emit / composite Project References / `paths` 绕过 build-first
 - 删除 tsdown 的 `fixedExtension: false` / `hash: false` 而不验证产物
 - 提交 `.env`、真实 token、或大体积无关二进制
 - 为“快”引入第二套并行领域模型（同一概念多套类型）

@@ -37,6 +37,8 @@ my-monorepo/
 ├── package.json            # root: private, scripts, shared devDeps
 ├── pnpm-workspace.yaml     # packages: ["packages/*"]
 ├── tsconfig.base.json      # shared typecheck-only options
+├── tsconfig.json           # files: [] + references; editor solution index only
+├── tsconfig.test.json      # Node test typecheck project
 ├── .oxlintrc.json / .oxfmtrc.json
 └── packages/
     ├── shared/             # leaf library
@@ -50,31 +52,36 @@ my-monorepo/
 
 - **Build**: tsdown, one config per package.
 - **Typecheck**: `tsc --noEmit` per package. Root `typecheck` = **build-first** (`pnpm -r run build && pnpm -r run typecheck`).
-- **Cross-package types**: resolved through the built `dist/*.d.ts` via pnpm symlinks + `exports`. No `paths`, no project references.
+- **Cross-package types**: resolved through the built `dist/*.d.ts` via pnpm symlinks + `exports`. No `paths` and no composite package-dependency reference graph. A root solution-style `tsconfig.json` may reference leaf configs solely so editors discover every project.
 - **Orchestration**: `pnpm -r` (topological). Add **turbo** only when you need caching/at scale (≥ ~10 packages); for small monorepos pnpm -r is enough.
 
 ---
 
 ## Core decisions (and why)
 
-### 1. ES2023 + `moduleResolution: "bundler"`, `module: "esnext"` — not `nodenext`
-Use `target: "es2023"` and `lib: ["es2023"]` for the Node 24 + modern-browser baseline. A bundler (tsdown/rolldown) resolves imports at build time, so tsc doesn't need Node-strict resolution. Source-relative imports and exports stay extensionless (`./foo`, not `./foo.js`); tsdown still emits stable `.js` files for publication. `nodenext` is for tsc-as-builder or pure-Node-resolution setups.
+### 1. Platform-neutral ES2023 base + `moduleResolution: "bundler"`, `module: "esnext"` — not `nodenext`
+Use `target: "es2023"`, `lib: ["es2023"]`, and `types: []` in the shared base. Keeping `lib` explicit matters: omitting it makes TypeScript add its default DOM-oriented libraries for this target. Packages opt into `dom` / `dom.iterable` only when their source uses Web APIs, and opt into `types: ["node"]` only when their source contains Node-specific implementations. A bundler (tsdown/rolldown) resolves imports at build time, so tsc doesn't need Node-strict resolution. Source-relative imports and exports stay extensionless (`./foo`, not `./foo.js`); tsdown still emits stable `.js` files for publication. `nodenext` is for tsc-as-builder or pure-Node-resolution setups.
 
-### 2. Build-first typecheck — NOT project references
+### 2. Build-first typecheck — NOT composite project-reference builds
 `tsc --noEmit` typechecks against the **built dist** of dependencies. Root `typecheck` builds all packages (topo order) first, then runs `tsc --noEmit` per package. Cross-package imports resolve via `exports` → `dist/*.d.ts`.
 
-**Why not TS Project References** (`composite` + `references` + `tsc --build`)? Project References is designed for when **tsc is the build tool** (it emits JS + d.ts as the build output, giving incremental builds). When you have a separate bundler, the forced emit becomes a liability: tsc's per-file d.ts fights the bundler's rolled-up d.ts for `dist`, and `composite`'s rootDir/include constraints are painful (TS6059/TS6307/TS6310). With a bundler, tsc should be a pure typechecker (`--noEmit`), and build-first is the matching pattern. (Project References is the right answer only if `build = tsc --build` with no bundler.)
+**Why not composite package references** (`composite` + package dependency `references` + `tsc --build`)? Project References is designed for when **tsc is the build tool** (it emits JS + d.ts as the build output, giving incremental builds). When you have a separate bundler, the forced emit becomes a liability: tsc's per-file d.ts fights the bundler's rolled-up d.ts for `dist`, and `composite`'s rootDir/include constraints are painful (TS6059/TS6307/TS6310). With a bundler, tsc should be a pure typechecker (`--noEmit`), and build-first is the matching pattern.
+
+A root solution-style `tsconfig.json` is a narrow exception: it has `files: []` and references package/test configs only so tsserver and editors can associate files with an arbitrarily named config such as `tsconfig.test.json`. It is not used by build scripts, does not introduce package dependency edges, and leaf configs do not enable `composite`.
 
 **Why not `paths`-to-source** (redirecting `@scope/foo` → source for clean-repo typecheck)? It works but is a workaround: every package maintains `paths` entries, self-references get hacky, and typecheck runs against source instead of the published dist. Build-first is simpler and typechecks against what consumers actually get. Use it.
 
 ### 3. tsc NEVER emits — dist is 100% the bundler's
 `tsconfig.base.json` carries **no emit options** (`declaration`/`declarationMap`/`sourceMap`/`outDir`/`rootDir` are all omitted — they're inert under `--noEmit` and only cause confusion). Per-package tsconfigs also omit `outDir`/`rootDir`. This guarantees `pnpm typecheck` produces zero files and never pollutes or overwrites `dist`.
 
-### 4. `types: ["node"]` in base, `@types/node` declared per-package where used
-- Base sets `types: ["node"]` so node globals (`fetch`, `URL`, `Response`, `fs`, `path`) resolve everywhere without per-package `types` config.
-- Each package that **uses node APIs** declares `@types/node` in its own `devDependencies` (self-contained, conventional — Vercel does this). Packages with no node usage (pure type/utility libs) can omit it and resolve from root.
+### 4. Platform types are explicit; Node tests stay isolated
+- Base uses only `lib: ["es2023"]` and `types: []`; neither DOM nor Node globals leak into every package.
+- A package whose source uses Web APIs such as `fetch`, `URL`, `Response`, `AbortController`, or browser globals adds `lib: ["es2023", "dom", "dom.iterable"]` in its own tsconfig.
+- A package whose **source** contains an explicit Node implementation (for example a dynamic `import("node:fs")`) adds `compilerOptions.types: ["node"]` in its own tsconfig and declares `@types/node` in its own `devDependencies`. A dual implementation package may intentionally opt into both DOM libs and Node types.
+- Node-based tests use a separate test tsconfig with `types: ["node"]`. Keep production package tsconfigs scoped to `src`; otherwise importing `node:test` from tests re-pollutes the source compilation and defeats the dual-runtime guardrail.
+- Reference the test config from the root solution config so VS Code assigns test files to it instead of an inferred project.
 
-**Do NOT use `lib: ["dom"]` to provide `fetch`/`URL`** — those are Node globals; `dom` is the browser lib and is the wrong source. Use `@types/node`. `lib` should be `["es2023"]` only (add `"dom"` only for packages that genuinely touch browser APIs, e.g. a rendering lib using JSX HTML elements — and even then JSX types usually come from `@types/react`, not `dom`).
+This is a type-surface guardrail, not proof of runtime portability. Keep Node-only imports dynamic or behind an explicit Node-only API, and verify the browser bundle with a real Web smoke test.
 
 ### 5. ESM-only, extensionless source imports, `.js` publication
 - `"type": "module"` on every package.
@@ -150,7 +157,7 @@ packages:
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
     "useDefineForClassFields": true,
-    "types": ["node"]
+    "types": []
   }
 }
 ```
@@ -162,6 +169,27 @@ packages:
   "include": ["src"]
 }
 ```
+For a package whose source intentionally contains Node-only branches:
+```json
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["src"]
+}
+```
+For a package that uses Web APIs:
+```json
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2023", "dom", "dom.iterable"]
+  },
+  "include": ["src"]
+}
+```
+For a dual implementation package with Web APIs and Node-specific branches, combine both explicit opt-ins in that package config.
 For a package with JSX (React rendering):
 ```json
 {
@@ -173,7 +201,28 @@ For a package with JSX (React rendering):
   "include": ["src"]
 }
 ```
-If a package also typechecks `tests/` together with `src` (e.g. tests import the package via its name), add `"tests"` to `include`. No `outDir`, no `rootDir`, no `paths`, no `references`, no `composite`.
+Do not add Node tests to the production package `include`. Typecheck them through a separate root config so Node globals do not become visible while checking `src`:
+```json
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["packages/*/tests/**/*.ts"]
+}
+```
+Add a standard root `tsconfig.json` so editors discover the arbitrary test config name:
+```json
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/shared/tsconfig.json" },
+    { "path": "./packages/core/tsconfig.json" },
+    { "path": "./tsconfig.test.json" }
+  ]
+}
+```
+No `outDir`, no `rootDir`, no `paths`, and no `composite` in leaf configs. Do not run `tsc -b` as the package build; the root references are an editor solution index, not the build graph.
 
 ### Per-package `tsdown.config.ts` (single-entry library)
 ```ts
@@ -226,17 +275,12 @@ export default defineConfig({
   },
   "dependencies": {
     "@scope/shared": "workspace:*"
-  },
-  "devDependencies": {
-    "@types/node": "^24",
-    "tsdown": "^0.22",
-    "typescript": "^6"
   }
 }
 ```
 - The shown `exports` field is generated by `tsdown` during `build`; do not maintain a parallel manual map. Keep `types` for tooling that still reads the top-level declaration entry.
 - Internal deps use `"workspace:*"`.
-- Declare `@types/node` only in packages that use node APIs.
+- Declare `@types/node` only in packages whose published source uses Node APIs. A package that uses Node only from tests relies on the root `@types/node` and the separate test tsconfig; it does not need a package-level declaration.
 - Do **not** publish `src` for a normal bundled library. Ship `dist`, README, LICENSE, and only runtime assets that code actually loads (for example `assets` or `data`). Verify the real tarball with `pnpm pack --dry-run --json`; inspecting `files` alone is not enough.
 - For a CLI, add `"bin": { "my-cli": "./dist/cli.js" }`.
 
@@ -264,11 +308,12 @@ dist
 1. `pnpm init` the root; set `"private": true`, `"type": "module"`, and an exact `"packageManager": "pnpm@<version>"`. Avoid `corepack use` when it appends an integrity suffix or rewrites the project lockfile as package-manager installation state.
 2. Add `pnpm-workspace.yaml` (`packages: ["packages/*"]`).
 3. Add root devDeps: `pnpm add -D -w tsdown typescript @types/node oxlint oxfmt oxlint-tsgolint`.
-4. Create `tsconfig.base.json` (template above).
-5. For each package: create `packages/<name>/` with `package.json`, `tsconfig.json`, `tsdown.config.ts`, `src/index.ts`.
-6. `pnpm install` (links workspace deps).
-7. Delete all `dist`, then verify: `pnpm check` (build-first lint + format), `pnpm typecheck`, and tests. Before publishing, inspect `pnpm --filter './packages/*' -r pack --dry-run --json` to confirm no `src`, tests, configs, or scripts are shipped.
-8. Add tests: `node --test tests/foo.test.ts` (Node 24 type-strips `.ts`) or vitest. Tests that import the package by name need the package built first — run `build` before `node --test`, or rely on root `typecheck` (which builds).
+4. Create `tsconfig.base.json` (template above) with only ES libs and `types: []`.
+5. For each package: create `packages/<name>/` with `package.json`, `tsconfig.json`, `tsdown.config.ts`, `src/index.ts`. Add DOM libs and Node types locally only where source code needs them; use a separate Node test tsconfig for tests.
+6. Add a root solution-style `tsconfig.json` referencing all package configs and the test config so editors discover them. Keep it out of build commands and keep leaf configs non-composite.
+7. `pnpm install` (links workspace deps).
+8. Delete all `dist`, then verify: `pnpm check` (build-first lint + format), `pnpm typecheck`, and tests. Before publishing, inspect `pnpm --filter './packages/*' -r pack --dry-run --json` to confirm no `src`, tests, configs, or scripts are shipped.
+9. Add tests: `node --test tests/foo.test.ts` (Node 24 type-strips `.ts`) or vitest. Tests that import the package by name need the package built first — run `build` before `node --test`, or rely on root `typecheck` (which builds).
 
 ---
 
@@ -398,9 +443,12 @@ After the OIDC publish path has succeeded, restrict the package's Publishing acc
 
 - **`fixedExtension` / `hash` are not defaults in tsdown.** Removing them silently changes output to `.mjs` + hashed chunk names and breaks `exports`. Always build and inspect `dist/` before deleting any tsdown option that looks "default-ish."
 - **tsc must stay `--noEmit`.** If typecheck ever writes files to `dist`, it'll fight the bundler. The base tsconfig has zero emit options precisely to prevent this.
-- **`dom` lib is a crutch for Node globals.** `fetch`/`URL`/`Response` come from `@types/node`, not `dom`. Don't put `dom` in the base lib for Node packages.
+- **Root-installed `@types/node` is automatically visible unless `types` is explicit.** Keep base `types: []`; merely removing `types: ["node"]` is insufficient because TypeScript otherwise auto-includes visible `@types/*` packages.
+- **Omitting `lib` is not platform-neutral.** TypeScript supplies default libraries that include DOM declarations for common targets. Keep base `lib: ["es2023"]`, then opt into DOM per package.
+- **Do not put Node tests in the production package tsconfig.** A test import from `node:test` forces that compilation to load Node types and can hide accidental `process` / `Buffer` usage in browser-targeted source. Typecheck tests separately.
+- **An arbitrary `tsconfig.test.json` is not discovered by the editor on its own.** Reference it from a root `files: []` solution config. This is editor indexing only; do not turn it into a composite package build graph.
 - **`skipNodeModulesBundle: true` is usually redundant.** tsdown already externalizes `dependencies`. Only reach for `external: [...]` when you have a specific dep to force out.
-- **Project References + a bundler = pain.** If you find yourself fighting `composite`/rootDir/emit, you probably want build-first instead. Project References is for tsc-as-builder setups.
+- **Composite Project References + a bundler = pain.** If you find yourself fighting `composite`/rootDir/emit, keep the root references as an editor-only solution index and use build-first package checks instead.
 - **Cross-package typecheck fails on a clean repo?** That means typecheck isn't build-first. Make root `typecheck` run `build` first (`pnpm -r run build && pnpm -r run typecheck`), or — at scale — use turbo with `typecheck dependsOn: ["^build"]`.
 - **Type-aware lint passes locally but fails in CI with error/any types?** Existing `dist` masked a missing build step. Make root lint/check build-first and reproduce from `pnpm clean`; do not weaken the lint rules.
 - **Latest `pnpm/action-setup` cannot self-update to the package's pinned pnpm?** Do not duplicate or downgrade the pnpm version in every workflow. Run `actions/setup-node` first, then `corepack enable pnpm`; Corepack reads the exact root `packageManager`. Remove `setup-node`'s `cache: pnpm` unless pnpm is already available before that action. Keep the lockfile as one YAML document—package-manager bootstrap dependencies do not belong in the project lockfile.
@@ -520,6 +568,6 @@ Full project wording: repo-root **`AGENTS.md`** →「公开面收窄与 API 文
 
 ## Reference
 
-This architecture is aligned to **Vercel's `vercel/chat` SDK** (pnpm + turbo + tsup + `tsc --noEmit` + `typecheck dependsOn: ^build` + `moduleResolution: bundler` + per-package build config + no project references). The differences from Vercel's setup, by choice: tsdown instead of tsup; `pnpm -r` instead of turbo (for small monorepos); `@types/node` declared per-package only where node APIs are used.
+This architecture borrows the bundler-first, package-local `tsc --noEmit`, and build-before-typecheck shape used by **Vercel's `vercel/chat` SDK**, while deliberately keeping a stricter platform boundary: neutral ES-only base types, DOM/Node opt-in per package, a separately typechecked Node test project, and a root editor solution index. The build remains pnpm + tsdown rather than a composite `tsc -b` graph.
 
 For **mai-kit domain boundaries, docs vs adapters, and delivery gates**, always also read repo-root **`AGENTS.md`**.

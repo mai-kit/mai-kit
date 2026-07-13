@@ -4,6 +4,7 @@ dist
 .cache
 .DS_Store
 .pnpm-store
+.codex/
 .env
 # draw 渲染产物（测试预览）
 packages/draw/output/

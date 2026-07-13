@@ -33,8 +33,5 @@
   },
   "dependencies": {
     "@mai-kit/shared": "workspace:*"
-  },
-  "devDependencies": {
-    "@types/node": "^24.5.1"
   }
 }

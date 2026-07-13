@@ -34,8 +34,5 @@
   "dependencies": {
     "@mai-kit/prober": "workspace:*",
     "@mai-kit/utils": "workspace:*"
-  },
-  "devDependencies": {
-    "@types/node": "^24.5.1"
   }
 }

@@ -11,7 +11,7 @@
   "scripts": {
     "build": "pnpm --filter './packages/*' -r run build",
     "dev": "pnpm --filter './packages/*' -r --parallel run dev",
-    "typecheck": "pnpm run build && pnpm --filter './packages/*' -r run typecheck && tsc --noEmit -p tests/web/tsconfig.json",
+    "typecheck": "pnpm run build && pnpm --filter './packages/*' -r run typecheck && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tests/web/tsconfig.json",
     "test": "pnpm run build && pnpm --filter './packages/*' -r --if-present run test:unit",
     "test:web": "pnpm run build && pnpm run test:web:built",
     "test:web:built": "pnpm --filter mai-kit-docs exec vite build ../tests/web && node tests/web/run.mjs",
