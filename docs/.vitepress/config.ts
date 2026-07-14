@@ -65,6 +65,7 @@ export default defineConfig({
     logo: "/mai-kit-chibi.png",
     nav: [
       { text: "指南", link: "/guide/getting-started" },
+      { text: "渲染预览", link: "/guide/draw-preview" },
       { text: "API", link: "/api/" },
       { text: "关于", link: "/guide/about" },
     ],
@@ -74,6 +75,7 @@ export default defineConfig({
           text: "指南",
           items: [
             { text: "快速开始", link: "/guide/getting-started" },
+            { text: "Draw 渲染预览", link: "/guide/draw-preview" },
             { text: "包与职责", link: "/guide/architecture" },
             { text: "关于", link: "/guide/about" },
           ],
