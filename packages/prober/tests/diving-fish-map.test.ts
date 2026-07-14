@@ -57,6 +57,21 @@ void test("Diving-Fish public B50 maps profile and scores without fabricated fie
   });
 });
 
+void test("Diving-Fish preserves an upstream whitespace-only title", async () => {
+  const payload = {
+    rating: 16_000,
+    nickname: "test",
+    charts: { dx: [{ ...sample, title: "　" }], sd: [] },
+  };
+
+  await withMockedFetch(payload, async () => {
+    const player = await createDivingFishClient({
+      baseURL: "https://example.test/api/",
+    }).getPlayer({ username: "test" });
+    assert.equal((await player.getBests()).dx[0]?.song_name, "　");
+  });
+});
+
 void test("Diving-Fish public B50 rejects malformed required data", async () => {
   const invalidPayloads = [
     { rating: 15_000, charts: { dx: [], sd: [] } },
@@ -97,6 +112,17 @@ void test("Diving-Fish complete records split B50 by music_data is_new", async (
     { ...sample, song_id: 2, ra: 300, type: "DX" },
     { ...sample, song_id: 3, ra: 200, type: "SD" },
     { ...sample, song_id: 4, ra: 400, type: "SD" },
+    {
+      ...sample,
+      song_id: 100508,
+      title: "[宴] Song",
+      level: "13?",
+      level_index: 0,
+      level_label: "Utage",
+      achievements: 196,
+      ra: 0,
+      type: "DX",
+    },
   ];
   const payload = { rating: 16_000, nickname: "test", records };
   const musicData = [
@@ -120,6 +146,11 @@ void test("Diving-Fish complete records split B50 by music_data is_new", async (
       assert.deepEqual(
         bests.standard.map((score) => score.id),
         [4, 3],
+      );
+      const utage = await player.getScores({ songId: 100508 });
+      assert.deepEqual(
+        utage.map((score) => [score.id, score.type]),
+        [[100508, "utage"]],
       );
     },
   );

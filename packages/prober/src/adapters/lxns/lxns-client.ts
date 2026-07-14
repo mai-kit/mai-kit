@@ -1,17 +1,17 @@
-import type { FullProberPlayer } from "../../prober-player";
 import { LxnsProberError } from "./error";
 import { LXNS_DEFAULT_BASE_URL, LxnsHttp } from "./lxns-http";
 import { LxnsDevApi } from "./lxns-dev-api";
-import type { LxnsDevQueries } from "./lxns-dev-api";
-import { LxnsPersonalPlayer } from "./lxns-player";
+import type { LxnsDevClient } from "./lxns-dev-api";
+import { LxnsPersonalPlayerImpl } from "./lxns-player";
+import type { LxnsPersonalPlayer } from "./lxns-player";
 
 /**
  * LXNS 适配的客户端选项（至少提供一种 token）。
  *
  * | 字段 | 用途 |
  * |------|------|
- * | `personalAccessToken` | 个人令牌 → 暴露 `me(): FullProberPlayer` |
- * | `devAccessToken` | 开发者令牌 → 暴露按好友码查询 |
+ * | `personalAccessToken` | 个人令牌 → 暴露 `me(): LxnsPersonalPlayer` |
+ * | `devAccessToken` | 开发者令牌 → 暴露按好友码 / QQ 绑定玩家 |
  * | `baseURL` | API 根，默认官方地址 |
  */
 export interface LxnsClientOptions {
@@ -36,8 +36,8 @@ export interface LxnsClientOptions {
 /**
  * LXNS 适配客户端类型：按构造时传入的 token **条件暴露方法**。
  *
- * - 有 `personalAccessToken` → `me(): FullProberPlayer`（已绑定当前用户）
- * - 有 `devAccessToken` → 按好友码的查询方法
+ * - 有 `personalAccessToken` → `me(): LxnsPersonalPlayer`（已绑定当前用户）
+ * - 有 `devAccessToken` → `getPlayer(friendCode)` / `getPlayerByQQ(qq)`
  * - 未传的能力在类型上不存在，编译期即可发现误用
  */
 export type LxnsClient<O extends LxnsClientOptions> = ([O["personalAccessToken"]] extends [
@@ -45,10 +45,10 @@ export type LxnsClient<O extends LxnsClientOptions> = ([O["personalAccessToken"]
 ]
   ? {
       /** 获取与个人令牌绑定的当前玩家查询对象。 */
-      me(): FullProberPlayer;
+      me(): LxnsPersonalPlayer;
     }
   : object) &
-  ([O["devAccessToken"]] extends [NonNullable<O["devAccessToken"]>] ? LxnsDevQueries : object);
+  ([O["devAccessToken"]] extends [NonNullable<O["devAccessToken"]>] ? LxnsDevClient : object);
 
 /**
  * 创建 **LXNS 查分适配**客户端（将 LXNS API 映射为 {@link ProberPlayer} 等通用类型）。
@@ -66,8 +66,8 @@ export type LxnsClient<O extends LxnsClientOptions> = ([O["personalAccessToken"]
  * @example 按好友码查别人
  * ```ts
  * const client = createLxnsClient({ devAccessToken: token });
- * const profile = await client.getPlayer(friendCode);
- * const bests = await client.getBests(friendCode);
+ * const player = client.getPlayer(friendCode);
+ * const [profile, bests] = await Promise.all([player.getProfile(), player.getBests()]);
  * ```
  */
 export function createLxnsClient<O extends LxnsClientOptions>(options: O): LxnsClient<O> {
@@ -102,11 +102,11 @@ export function createLxnsClient<O extends LxnsClientOptions>(options: O): LxnsC
   }
 
   const client = (devHttp ? new LxnsDevApi(devHttp) : {}) as {
-    me?: () => FullProberPlayer;
-  } & Partial<LxnsDevQueries>;
+    me?: () => LxnsPersonalPlayer;
+  } & Partial<LxnsDevClient>;
 
   if (personalHttp) {
-    client.me = () => new LxnsPersonalPlayer(personalHttp);
+    client.me = () => new LxnsPersonalPlayerImpl(personalHttp);
   }
 
   // 条件类型工厂的固有断言：运行时按 token 构造，类型上无法静态验证

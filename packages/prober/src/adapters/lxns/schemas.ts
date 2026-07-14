@@ -10,8 +10,10 @@ import type {
   RatingTrend,
   Score,
   ScoreHistory,
+  ScoreRankingEntry,
   SimpleScore,
 } from "../../models";
+import type { LxnsYearInReview } from "./lxns-player";
 
 const songTypeSchema = z.literal(["standard", "dx", "utage"]);
 const levelIndexSchema = z.literal([0, 1, 2, 3, 4]);
@@ -82,6 +84,8 @@ export const collectionSchema = z.object({
   genre: z.optional(z.string()),
   required: z.optional(z.array(collectionRequiredSchema)),
 }) satisfies z.ZodMiniType<Collection>;
+
+export const collectionListSchema = z.array(collectionSchema) satisfies z.ZodMiniType<Collection[]>;
 
 const playerCollectionSchema = z.object({
   id: z.optional(z.int()),
@@ -163,6 +167,26 @@ export const ratingTrendListSchema = z.array(ratingTrendSchema) satisfies z.ZodM
   RatingTrend[]
 >;
 export const scoreHistorySchema = z.nullable(scoreListSchema) satisfies z.ZodMiniType<ScoreHistory>;
+
+const scoreRankingEntrySchema = z.object({
+  ranking: z.int(),
+  player_name: z.optional(z.string()),
+  achievements: z.optional(z.number()),
+  dx_score: z.optional(z.int()),
+  upload_time: z.string(),
+}) satisfies z.ZodMiniType<ScoreRankingEntry>;
+
+export const scoreRankingListSchema = z.array(scoreRankingEntrySchema) satisfies z.ZodMiniType<
+  ScoreRankingEntry[]
+>;
+
+export const yearInReviewSchema = z.looseObject({
+  game: z.string(),
+  year: z.int(),
+  latest_version: z.int(),
+  player_name: z.string(),
+  player_avatar_id: z.int(),
+}) satisfies z.ZodMiniType<LxnsYearInReview>;
 
 function normalizeLxnsCollectionRequired(required: LxnsCollectionRequired): CollectionRequired {
   const { fc, fs, ...rest } = required;

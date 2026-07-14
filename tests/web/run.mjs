@@ -91,6 +91,8 @@ try {
   assert.equal(result.inferenceAchievement, 90);
   assert.equal(result.inferenceDxScore, 20);
   assert.equal(result.proberRating, 15_000);
+  assert.equal(result.proberScoreCount, 1);
+  assert.equal(result.proberUtageType, "utage");
   console.log(result);
 } catch (error) {
   if (chromeStderr) console.error(chromeStderr);

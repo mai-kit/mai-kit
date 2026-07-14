@@ -46,6 +46,27 @@ export const recordsPlayerPayloadSchema = z.object({
 export type DivingFishRecordsPlayerPayload = z.infer<typeof recordsPlayerPayloadSchema>;
 export type DivingFishPlayerPayload = DivingFishQueryPlayerPayload | DivingFishRecordsPlayerPayload;
 
+export const recordsBySongSchema = z.record(z.string(), z.array(divingFishRecordSchema));
+
+export type DivingFishRecordsBySongPayload = z.infer<typeof recordsBySongSchema>;
+
+const versionRecordSchema = z.object({
+  id: z.int(),
+  title: z.string(),
+  level: z.string(),
+  level_index: z.int(),
+  type: z.string(),
+  achievements: z.number(),
+  fc: z.string(),
+  fs: z.string(),
+});
+
+export type DivingFishVersionRecord = z.infer<typeof versionRecordSchema>;
+
+export const versionRecordsPayloadSchema = z.object({
+  verlist: z.array(versionRecordSchema),
+});
+
 const ratingRankEntrySchema = z.object({
   username: z.string(),
   ra: z.number(),

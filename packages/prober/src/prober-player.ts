@@ -1,5 +1,7 @@
 import type {
   Bests,
+  Collection,
+  CollectionType,
   Heatmap,
   PlayerProfile,
   RatingTrend,
@@ -7,6 +9,7 @@ import type {
   ScoreHistory,
   ScoreKey,
   ScoreQuery,
+  ScoreRankingEntry,
 } from "./models";
 
 /**
@@ -58,6 +61,30 @@ export interface HeatmapCapability {
 export interface ScoreHistoryCapability {
   /** 单谱面成绩历史；无记录时可能为 `null` */
   getScoreHistory(key: ScoreKey): Promise<ScoreHistory>;
+}
+
+/** 提供单谱面最佳成绩查询的玩家能力。 */
+export interface BestScoreCapability {
+  /** 指定谱面的最佳成绩。 */
+  getBest(key: ScoreKey): Promise<Score>;
+}
+
+/** 提供单谱面公开排行查询的玩家能力。 */
+export interface ScoreRankingCapability {
+  /** 指定谱面的公开成绩排行。 */
+  getScoreRanking(key: ScoreKey): Promise<ScoreRankingEntry[]>;
+}
+
+/** 提供玩家已获得收藏品列表的能力。 */
+export interface PlayerCollectionListCapability {
+  /** 指定类型的已获得收藏品。 */
+  getCollections(type: CollectionType): Promise<Collection[]>;
+}
+
+/** 提供单个收藏品完成进度的能力。 */
+export interface PlayerCollectionProgressCapability {
+  /** 指定收藏品的完成进度。 */
+  getCollectionProgress(type: CollectionType, id: number): Promise<Collection>;
 }
 
 /**

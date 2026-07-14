@@ -115,7 +115,7 @@ Best 板的署名为**第一位置参数**；单曲卡不展示玩家信息。
 const client = createLxnsClient({
   devAccessToken: process.env.LXNS_API_DEV_ACCESS_TOKEN!,
 });
-const player = await client.getPlayer(friendCode);
+const player = client.getPlayer(friendCode);
 const [profile, bests] = await Promise.all([player.getProfile(), player.getBests()]);
 ```
 

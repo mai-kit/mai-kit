@@ -6,13 +6,13 @@ import {
 import { LevelIndex, LxnsMaimaiDatabase } from "../../packages/database/dist/index.js";
 import { Draw } from "../../packages/draw/dist/index.js";
 import { inferJudgementDistribution } from "../../packages/judgement-inference/dist/index.js";
-import { createLxnsClient } from "../../packages/prober/dist/index.js";
 import {
   evaluateJudgementPlan,
   JUDGEMENT_TARGETS,
   solveJudgementLimit,
   solveJudgementLimits,
 } from "../../packages/judgement-solver/dist/index.js";
+import { createDivingFishClient, createLxnsClient } from "../../packages/prober/dist/index.js";
 import { calculateAchievement, calculateChartDxScore } from "../../packages/utils/dist/index.js";
 
 declare global {
@@ -35,6 +35,8 @@ interface SmokeResult {
   inferenceAchievement?: number;
   inferenceDxScore?: number;
   proberRating?: number;
+  proberScoreCount?: number;
+  proberUtageType?: string;
 }
 
 window.maiKitSmoke = { status: "running" };
@@ -56,7 +58,7 @@ async function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
 }
 
 try {
-  const proberProfile = await withTimeout(loadMockLxnsProfile(), "prober schema validation");
+  const prober = await withTimeout(loadMockProberData(), "prober schema validation");
   const badge = getRateBadge("sssp");
   const [{ notoSansSc, comfortaa }, wasm] = await withTimeout(
     Promise.all([getDefaultFontBuffers(), getResvgWasmBytes()]),
@@ -144,7 +146,9 @@ try {
     solverMixedSatisfied: solverMixed.satisfied,
     inferenceAchievement,
     inferenceDxScore,
-    proberRating: proberProfile.rating,
+    proberRating: prober.rating,
+    proberScoreCount: prober.scoreCount,
+    proberUtageType: prober.utageType,
   };
   document.querySelector("#status")?.replaceChildren("ok");
   document.querySelector("#result")?.replaceChildren(JSON.stringify(window.maiKitSmoke));
@@ -155,32 +159,89 @@ try {
   document.querySelector("#result")?.replaceChildren(JSON.stringify(window.maiKitSmoke));
 }
 
-async function loadMockLxnsProfile() {
+async function loadMockProberData(): Promise<{
+  rating: number;
+  scoreCount: number;
+  utageType: string;
+}> {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () =>
-    new Response(
-      JSON.stringify({
-        success: true,
-        code: 200,
-        data: {
-          name: "Web Smoke",
-          rating: 15_000,
-          friend_code: 123456789,
-          course_rank: 10,
-          class_rank: 5,
-          star: 2,
+  globalThis.fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    const url = new URL(request.url);
+    if (url.pathname.endsWith("/user/maimai/player")) {
+      return lxnsResponse({
+        name: "Web Smoke",
+        rating: 15_000,
+        friend_code: 123456789,
+        course_rank: 10,
+        class_rank: 5,
+        star: 2,
+      });
+    }
+    if (url.pathname.endsWith("/user/maimai/player/scores")) {
+      return lxnsResponse([
+        {
+          id: 1,
+          song_name: "Web Score",
+          level: "14",
+          level_index: 3,
+          achievements: 100.5,
+          dx_score: 2_800,
+          rate: "sssp",
+          type: "dx",
         },
-      }),
-      { status: 200, headers: { "Content-Type": "application/json" } },
-    );
+      ]);
+    }
+    if (url.pathname.endsWith("/dev/player/record")) {
+      return new Response(
+        JSON.stringify({
+          100508: [
+            {
+              achievements: 196,
+              ds: 13,
+              dxScore: 3_000,
+              fc: "",
+              fs: "sync",
+              level: "13?",
+              level_index: 0,
+              level_label: "Utage",
+              ra: 0,
+              rate: "sssp",
+              song_id: 100508,
+              title: "[宴] Web Score",
+              type: "DX",
+            },
+          ],
+        }),
+        { headers: { "Content-Type": "application/json" } },
+      );
+    }
+    throw new Error(`unexpected prober smoke request: ${url.href}`);
+  };
+
   try {
-    return await createLxnsClient({
-      personalAccessToken: "web-smoke",
+    const lxnsPlayer = createLxnsClient({
+      personalAccessToken: "web-token",
       baseURL: "https://example.test/api/v0/",
-    })
-      .me()
-      .getProfile();
+    }).me();
+    const profile = await lxnsPlayer.getProfile();
+    const scoreCount = (await lxnsPlayer.getScores({ songName: "Web Score" })).length;
+    const divingFishPlayer = await createDivingFishClient({
+      developerToken: "web-token",
+      baseURL: "https://example.test/api/",
+    }).getPlayer({ qq: 123456 });
+    const utageType = (await divingFishPlayer.getScoresBySongIds(100508))[0]?.type ?? "";
+    if (scoreCount !== 1) throw new Error("browser LXNS score filtering failed");
+    if (utageType !== "utage") throw new Error("browser Diving-Fish utage mapping failed");
+    return { rating: profile.rating, scoreCount, utageType };
   } finally {
     globalThis.fetch = originalFetch;
   }
+}
+
+function lxnsResponse(data: unknown): Response {
+  return new Response(JSON.stringify({ success: true, code: 200, data }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
 }

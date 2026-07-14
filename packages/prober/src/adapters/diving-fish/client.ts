@@ -1,6 +1,7 @@
 import type { ProberPlayer, ScoresProberPlayer } from "../../prober-player";
 import { DivingFishHttp } from "./http";
-import { DivingFishPlayer, DivingFishScoresPlayer } from "./player";
+import { DivingFishDeveloperPlayerImpl, DivingFishPlayer, DivingFishScoresPlayer } from "./player";
+import type { DivingFishDeveloperPlayer } from "./player";
 import type { DivingFishPlayerQuery, DivingFishRatingRankEntry } from "./types";
 
 /**
@@ -53,7 +54,7 @@ export type DivingFishClient<O extends DivingFishClientOptions = DivingFishClien
     query: DivingFishPlayerQuery,
   ): Promise<
     [O["developerToken"]] extends [NonNullable<O["developerToken"]>]
-      ? ScoresProberPlayer
+      ? DivingFishDeveloperPlayer
       : ProberPlayer
   >;
   /**
@@ -125,7 +126,7 @@ export function createDivingFishClient<O extends DivingFishClientOptions>(
   } = {
     async getPlayer(query) {
       if (opts.developerToken) {
-        return DivingFishScoresPlayer.fromDeveloperQuery(http, query);
+        return new DivingFishDeveloperPlayerImpl(http, query);
       }
       const payload = await http.queryPlayer(query);
       return DivingFishPlayer.fromQueryPayload(payload);

@@ -218,11 +218,41 @@ export interface ScoreKey {
  * const scores = await player.getScores(query);
  * ```
  */
-export interface ScoreQuery {
-  songId?: number;
+export type ScoreQuery = {
   songType?: SongType;
   levelIndex?: LevelIndex | number;
-}
+} & (
+  | {
+      /** 曲目 id；与 `songName` 二选一 */
+      songId?: number;
+      songName?: never;
+    }
+  | {
+      /** 曲名；适配不支持服务端曲名筛选时在本地过滤 */
+      songName: string;
+      songId?: never;
+    }
+);
+
+/** 必须指定曲目 id 或曲名的成绩查询（用于单曲 Best 接口）。 */
+export type SongScoreQuery = {
+  songType?: SongType;
+  levelIndex?: LevelIndex | number;
+} & ({ songId: number; songName?: never } | { songName: string; songId?: never });
 
 /** 单谱面的历史成绩；数据源明确表示无记录时为 `null`。 */
 export type ScoreHistory = Score[] | null;
+
+/** 单谱面公开排行中的一名玩家成绩。 */
+export interface ScoreRankingEntry {
+  /** 排名（从 1 开始） */
+  ranking: number;
+  /** 玩家昵称；隐私设置不允许展示时省略 */
+  player_name?: string;
+  /** 达成率；隐私设置不允许展示时省略 */
+  achievements?: number;
+  /** DX 分；隐私设置不允许展示时省略 */
+  dx_score?: number;
+  /** 成绩上传时间 */
+  upload_time: string;
+}

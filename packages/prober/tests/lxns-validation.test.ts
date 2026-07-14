@@ -47,7 +47,7 @@ void test("LXNS dev collection responses normalize FS codes from the upstream fc
         devAccessToken: "token",
         baseURL: "https://example.test/api/v0/",
       });
-      const result = await client.getPlayerCollection(123456789, "trophy", 5524);
+      const result = await client.getPlayer(123456789).getCollectionProgress("trophy", 5524);
 
       assert.equal(result.required?.[0]?.fc, undefined);
       assert.equal(result.required?.[0]?.fs, "fsp");
