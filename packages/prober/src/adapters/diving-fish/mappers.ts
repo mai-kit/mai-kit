@@ -1,7 +1,11 @@
 import { LevelIndex } from "@mai-kit/shared";
 import type { FCType, FSType, RateType, SongType } from "@mai-kit/shared";
 import type { Bests, PlayerProfile, Score } from "../../models";
-import type { DivingFishPlayerPayload, DivingFishRecord } from "./types";
+import type {
+  DivingFishPlayerPayload,
+  DivingFishQueryPlayerPayload,
+  DivingFishRecord,
+} from "./schemas";
 import { DivingFishProberError } from "./error";
 
 const RATE_CODES = [
@@ -175,12 +179,7 @@ function sumRating(scores: readonly (Score & { dx_rating: number })[]): number {
  * @returns Best50（新 15 + 旧 35）
  * @throws {DivingFishProberError} B50 分组缺失或任一成绩字段非法
  */
-export function mapDivingFishBestsFromCharts(payload: DivingFishPlayerPayload): Bests {
-  if (!payload.charts || !Array.isArray(payload.charts.dx) || !Array.isArray(payload.charts.sd)) {
-    throw new DivingFishProberError({
-      message: "Diving-Fish query/player response is missing charts.dx or charts.sd",
-    });
-  }
+export function mapDivingFishBestsFromCharts(payload: DivingFishQueryPlayerPayload): Bests {
   const dx = payload.charts.dx.map(mapDivingFishRecord);
   const standard = payload.charts.sd.map(mapDivingFishRecord);
   return {

@@ -1,23 +1,37 @@
 import type { ChartTag, ChartTagGroup, ChartTagQuery, SongType } from "./models";
 import { MaimaiDatabaseError } from "./error";
+import * as z from "zod/mini";
 
 /** @internal 上游快照地址（构建/同步脚本用；不从包根导出） */
 export const DXRATING_TAGS_SOURCE_URL = "https://miruku.dxrating.net/api/v1/tags";
 
-interface ChartTagSnapshotChart {
-  song_name: string;
-  type: Exclude<SongType, "utage">;
-  level_index: number;
-  tag_ids: number[];
-}
+const localizedTextSchema = z.record(z.string(), z.string());
+const chartTagSchema = z.object({
+  id: z.int(),
+  localized_name: localizedTextSchema,
+  localized_description: localizedTextSchema,
+  group_id: z.int(),
+}) satisfies z.ZodMiniType<ChartTag>;
+const chartTagGroupSchema = z.object({
+  id: z.int(),
+  localized_name: localizedTextSchema,
+  color: z.string(),
+}) satisfies z.ZodMiniType<ChartTagGroup>;
+const chartTagSnapshotChartSchema = z.object({
+  song_name: z.string(),
+  type: z.literal(["standard", "dx"]),
+  level_index: z.literal([0, 1, 2, 3, 4]),
+  tag_ids: z.array(z.int()),
+});
+const chartTagSnapshotSchema = z.object({
+  schema_version: z.literal(1),
+  source: z.string(),
+  tags: z.array(chartTagSchema),
+  tag_groups: z.array(chartTagGroupSchema),
+  charts: z.array(chartTagSnapshotChartSchema),
+});
 
-interface ChartTagSnapshot {
-  schema_version: 1;
-  source: string;
-  tags: ChartTag[];
-  tag_groups: ChartTagGroup[];
-  charts: ChartTagSnapshotChart[];
-}
+type ChartTagSnapshot = z.infer<typeof chartTagSnapshotSchema>;
 
 let snapshotPromise: Promise<ChartTagSnapshot> | undefined;
 let chartTagIndexPromise: Promise<Map<string, ChartTag[]>> | undefined;
@@ -72,9 +86,7 @@ async function loadSnapshot(): Promise<ChartTagSnapshot> {
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             return response.text();
           });
-    const snapshot: unknown = JSON.parse(text);
-    if (!isChartTagSnapshot(snapshot)) throw new Error("Invalid chart tag snapshot schema");
-    return snapshot;
+    return chartTagSnapshotSchema.parse(JSON.parse(text));
   } catch (error) {
     throw new MaimaiDatabaseError({
       message: "Failed to load bundled DXRating chart tags",
@@ -86,19 +98,4 @@ async function loadSnapshot(): Promise<ChartTagSnapshot> {
 async function readNodeFile(url: URL): Promise<string> {
   const fs = await import("node:fs/promises");
   return fs.readFile(url, "utf8");
-}
-
-function isChartTagSnapshot(value: unknown): value is ChartTagSnapshot {
-  if (!isRecord(value)) return false;
-  return (
-    value.schema_version === 1 &&
-    typeof value.source === "string" &&
-    Array.isArray(value.tags) &&
-    Array.isArray(value.tag_groups) &&
-    Array.isArray(value.charts)
-  );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value != null;
 }
