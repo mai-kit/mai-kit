@@ -18,7 +18,7 @@ export class JudgementInferenceNoExactSolutionError extends JudgementInferenceEr
   readonly solverStatus: JudgementInferenceSolverStatus;
   /** 是否已由求解器证明不存在精确解。 */
   readonly provenInfeasible: boolean;
-  /** 调用方显式要求最近解且求解成功时的一组最近判定。 */
+  /** 调用方显式要求最近解，且求解器已证明最优时的一组最近判定。 */
   readonly nearestJudgements?: ChartJudgements;
 
   constructor(

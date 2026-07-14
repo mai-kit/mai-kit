@@ -24,6 +24,7 @@ import type {
   JudgementInferenceSolverStatus,
   JudgementInferenceTarget,
 } from "./models";
+import { createRetryableCachedLoader } from "./solver-runtime";
 
 const NORMAL_TYPES = ["tap", "hold", "slide", "touch"] as const;
 const NORMAL_JUDGEMENTS = ["criticalPerfect", "perfect", "great", "good", "miss"] as const;
@@ -73,8 +74,6 @@ interface DetailMatch {
   matched: boolean;
 }
 
-let glpkPromise: Promise<GlpkModule> | undefined;
-
 function isNodeRuntime(): boolean {
   return (
     typeof process !== "undefined" &&
@@ -85,24 +84,28 @@ function isNodeRuntime(): boolean {
 }
 
 async function loadGlpk(): Promise<GlpkModule> {
-  const module = isNodeRuntime()
-    ? await import(/* @vite-ignore */ NODE_GLPK_SPECIFIER)
-    : await import("glpk.js");
-  const loader: unknown = module.default;
-  if (typeof loader !== "function") {
-    throw new JudgementInferenceError("glpk.js module did not provide a loader");
+  try {
+    const module = isNodeRuntime()
+      ? await import(/* @vite-ignore */ NODE_GLPK_SPECIFIER)
+      : await import("glpk.js");
+    const loader: unknown = module.default;
+    if (typeof loader !== "function") {
+      throw new JudgementInferenceError("glpk.js module did not provide a loader");
+    }
+    const loaded: unknown = await loader();
+    if (!isGlpkModule(loaded)) {
+      throw new JudgementInferenceError("glpk.js loader returned an invalid solver");
+    }
+    return loaded;
+  } catch (error) {
+    if (error instanceof JudgementInferenceError) throw error;
+    throw new JudgementInferenceError("failed to load or initialize glpk.js solver", {
+      cause: error,
+    });
   }
-  const loaded: unknown = await loader();
-  if (!isGlpkModule(loaded)) {
-    throw new JudgementInferenceError("glpk.js loader returned an invalid solver");
-  }
-  return loaded;
 }
 
-async function getGlpk(): Promise<GlpkModule> {
-  glpkPromise ??= loadGlpk();
-  return glpkPromise;
-}
+const getGlpk = createRetryableCachedLoader(loadGlpk);
 
 /**
  * 根据目标达成率、可选 DX 分与判定总数，反推一组满足条件的完整判定分布。
@@ -152,7 +155,7 @@ export async function inferJudgementDistribution(
       solveOptions(glpk, normalizedOptions.timeLimitMs, 0.2),
     );
     exactStatus = result.result.status;
-    if (isAcceptedStatus(glpk, exactStatus)) {
+    if (exactStatus === glpk.GLP_OPT || exactStatus === glpk.GLP_FEAS) {
       const judgements = buildJudgements(model.variables, result.result.vars);
       exactMatch = evaluateMatch(counts, judgements, normalizedTarget);
       if (exactMatch.matched) return judgements;
@@ -187,7 +190,8 @@ export async function inferJudgementDistribution(
       nearestModel,
       solveOptions(glpk, normalizedOptions.timeLimitMs, 0),
     );
-    if (isAcceptedStatus(glpk, nearestResult.result.status)) {
+    // GLP_FEAS may only be a timeout incumbent; “nearest” requires a proven optimum.
+    if (nearestResult.result.status === glpk.GLP_OPT) {
       nearestJudgements = buildJudgements(model.variables, nearestResult.result.vars);
       if (evaluateMatch(counts, nearestJudgements, normalizedTarget).matched) {
         return nearestJudgements;
@@ -647,10 +651,6 @@ function solveOptions(glpk: GlpkModule, timeLimitMs: number, mipgap: number): Gl
     tmlim: timeLimitMs / 1000,
     mipgap,
   };
-}
-
-function isAcceptedStatus(glpk: GlpkModule, status: number | undefined): boolean {
-  return status === glpk.GLP_OPT || status === glpk.GLP_FEAS;
 }
 
 function statusFromCode(

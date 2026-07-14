@@ -96,6 +96,9 @@ void test("returns a nearest distribution only after explicit opt-in", async () 
     (error: unknown) => {
       assert.ok(error instanceof JudgementInferenceNoExactSolutionError);
       assert.ok(error.nearestJudgements);
+      assert.equal(calculateAchievement(tenTaps, error.nearestJudgements), 100);
+      assert.equal(calculateChartDxScore(error.nearestJudgements).dxScore, 20);
+      assert.equal(error.nearestJudgements.tap.perfect, 10);
       return true;
     },
   );

@@ -18,8 +18,9 @@ export interface JudgementInferenceOptions {
   /** 单次 GLPK 求解时间上限（毫秒），默认 10000。 */
   timeLimitMs?: number;
   /**
-   * 精确解失败后是否继续求最近解并附在错误中，默认 false。
+   * 精确解失败后是否继续求最近解，默认 false。
    * 距离按达成率四位小数单位、DX 分和已指定汇总判定数的绝对差之和计算。
+   * 只有求解器在时限内证明最优时，错误才会附带 `nearestJudgements`。
    */
   findNearestOnFailure?: boolean;
 }
