@@ -43,6 +43,12 @@ const draw = new Draw({
 await writeFile("poster.png", await draw.poster(profile, bests));
 ```
 
+## 渲染效果
+
+[![mai-kit draw 完整 B50 海报渲染效果](docs/public/draw/poster.webp)](https://mai-kit.github.io/mai-kit/guide/draw-preview)
+
+完整海报、Best50、单曲成绩卡与加分推荐板见 [Draw 渲染预览](https://mai-kit.github.io/mai-kit/guide/draw-preview)。
+
 ## 许可证
 
 除 `@mai-kit/judgement-inference` 外，各包均为 MIT。判定反推包因使用 `glpk.js`，单独以

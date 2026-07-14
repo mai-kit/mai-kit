@@ -25,3 +25,9 @@ features:
   - title: 成绩海报
     details: 将玩家数据渲染为 PNG 或 SVG 海报，也可生成 Best15、Best35 和 Best50 单图。
 ---
+
+<script setup lang="ts">
+import DrawGallery from "./.vitepress/components/DrawGallery.vue";
+</script>
+
+<DrawGallery mode="home" />
