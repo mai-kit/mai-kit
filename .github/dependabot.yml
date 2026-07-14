@@ -1,0 +1,41 @@
+version: 2
+
+updates:
+  # pnpm workspace 必须从根目录统一更新，不能单独以 /docs 作为更新目录。
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 5
+    groups:
+      javascript-non-major:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      javascript-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Asia/Shanghai
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: chore
+      include: scope
