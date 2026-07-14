@@ -164,10 +164,10 @@ void test("API pages link to repository sources with full monorepo paths", async
   const assets = await readApi("@mai-kit/assets/functions/getRateBadge.md");
   const utils = await readApi("@mai-kit/utils/song/functions/buildSongDxMaxMap.md");
 
-  assert.match(draw, /github\.com\/wsyzxjn\/mai-kit\/blob\/main\/packages\/draw\/src\/draw\.ts#L/u);
+  assert.match(draw, /github\.com\/mai-kit\/mai-kit\/blob\/main\/packages\/draw\/src\/draw\.ts#L/u);
   assert.match(assets, /blob\/main\/packages\/assets\/src\/index\.ts#L/u);
   assert.match(utils, /blob\/main\/packages\/utils\/src\/song-maps\.ts#L/u);
-  assert.doesNotMatch(api, /github\.com\/wsyzxjn\/mai-kit\/blob\/main\/(?!packages\/)/u);
+  assert.doesNotMatch(api, /github\.com\/mai-kit\/mai-kit\/blob\/main\/(?!packages\/)/u);
 });
 
 void test("key public APIs include usage examples", async () => {
