@@ -4,6 +4,7 @@
     { "path": "./packages/shared/tsconfig.json" },
     { "path": "./packages/utils/tsconfig.json" },
     { "path": "./packages/judgement-solver/tsconfig.json" },
+    { "path": "./packages/judgement-inference/tsconfig.json" },
     { "path": "./packages/database/tsconfig.json" },
     { "path": "./packages/prober/tsconfig.json" },
     { "path": "./packages/analysis/tsconfig.json" },

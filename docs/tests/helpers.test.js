@@ -42,13 +42,20 @@ void test("categoryWeight and sortCategoryList", () => {
 
 void test("sortModuleNames follows packageOrder", () => {
   const ordered = sortModuleNames(
-    ["@mai-kit/draw", "@mai-kit/judgement-solver", "@mai-kit/shared", "@mai-kit/utils"],
+    [
+      "@mai-kit/draw",
+      "@mai-kit/judgement-inference",
+      "@mai-kit/judgement-solver",
+      "@mai-kit/shared",
+      "@mai-kit/utils",
+    ],
     categoriesConfig.packageOrder,
   );
   assert.deepEqual(ordered, [
     "@mai-kit/shared",
     "@mai-kit/utils",
     "@mai-kit/judgement-solver",
+    "@mai-kit/judgement-inference",
     "@mai-kit/draw",
   ]);
 });

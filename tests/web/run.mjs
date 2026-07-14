@@ -88,6 +88,9 @@ try {
   assert.equal(result.solverRemaining, 3);
   assert.equal(result.solverTargetCount, 23);
   assert.equal(result.solverMixedSatisfied, true);
+  assert.equal(result.inferenceAchievement, 90);
+  assert.equal(result.inferenceDxScore, 20);
+  assert.equal(result.proberRating, 15_000);
   console.log(result);
 } catch (error) {
   if (chromeStderr) console.error(chromeStderr);
