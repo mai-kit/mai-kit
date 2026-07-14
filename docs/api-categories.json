@@ -3,6 +3,7 @@
     "@mai-kit/shared",
     "@mai-kit/utils",
     "@mai-kit/judgement-solver",
+    "@mai-kit/judgement-inference",
     "@mai-kit/database",
     "@mai-kit/prober",
     "@mai-kit/assets",
@@ -60,6 +61,9 @@
     },
     "judgement-solver": {
       "rules": [{ "category": "判定求解" }]
+    },
+    "judgement-inference": {
+      "rules": [{ "file": "/error\\.ts$", "category": "错误" }, { "category": "判定反推" }]
     },
     "utils": {
       "rules": [

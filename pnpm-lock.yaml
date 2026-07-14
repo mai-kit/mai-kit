@@ -117,6 +117,22 @@ importers:
         specifier: ^19.1.0
         version: 19.2.17
 
+  packages/judgement-inference:
+    dependencies:
+      '@mai-kit/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@mai-kit/utils':
+        specifier: workspace:*
+        version: link:../utils
+      glpk.js:
+        specifier: ^5.0.0
+        version: 5.0.0
+    devDependencies:
+      '@types/node':
+        specifier: ^24.5.1
+        version: 24.13.2
+
   packages/judgement-solver:
     dependencies:
       '@mai-kit/shared':
@@ -1553,6 +1569,10 @@ packages:
     resolution: {integrity: sha512-jhIXaOzy1sb8IyocaruWSn1TjmnBVs8Ayhcy83rmxNJ8q2uWKCAj3CnJY+KpGSXCueAPc0i05kVvVKtP1t9S3g==}
     engines: {node: '>=10'}
 
+  glpk.js@5.0.0:
+    resolution: {integrity: sha512-ni6nVv/EZVLs4dbN13Vy/H9pDTCjhB9oTlJ7tYi3e7zT6GCunUZJ0DuwCaJhmNc25sQUm6Ra18VaaMY8/fMWWw==}
+    engines: {node: '>=20'}
+
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
 
@@ -1773,6 +1793,9 @@ packages:
 
   pako@0.2.9:
     resolution: {integrity: sha512-NUcwaKxUxWrZLpDG+z/xZaCgQITkA/Dv4V/T6bw7VON6l1Xz/VnrBqrYjZQ12TamKHzITTfOEIYUj48y2KXImA==}
+
+  pako@2.2.0:
+    resolution: {integrity: sha512-zJq6RP/5q+TO2OpFV3FHzlPnFjmkb7Nc99a5SNjJE+uu/PkpChs+NIZSSzbBoD+6kjiISXjfYdwj1ZRQ81dz/w==}
 
   parse-css-color@0.2.1:
     resolution: {integrity: sha512-bwS/GGIFV3b6KS4uwpzCFj4w297Yl3uqnSgIPsoQkx7GMLROXfMnWvxfNkL0oh8HVhZA4hvJoEoEIqonfJ3BWg==}
@@ -3406,6 +3429,10 @@ snapshots:
       merge2: 1.4.1
       slash: 3.0.0
 
+  glpk.js@5.0.0:
+    dependencies:
+      pako: 2.2.0
+
   graceful-fs@4.2.11: {}
 
   hast-util-to-html@9.0.5:
@@ -3646,6 +3673,8 @@ snapshots:
       quansync: 0.2.11
 
   pako@0.2.9: {}
+
+  pako@2.2.0: {}
 
   parse-css-color@0.2.1:
     dependencies:

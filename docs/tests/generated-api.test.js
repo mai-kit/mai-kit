@@ -93,18 +93,20 @@ void test("sidebar uses semantic API categories", async () => {
   assert.match(sidebarText, /"text": "常用公式"/u);
   assert.match(sidebarText, /"text": "判定计算"/u);
   assert.match(sidebarText, /"text": "判定求解"/u);
+  assert.match(sidebarText, /"text": "判定反推"/u);
   assert.match(sidebarText, /"text": "谱面索引"/u);
   assert.match(sidebarText, /"text": "B50 分析"/u);
   assert.match(sidebarText, /"text": "升分分析"/u);
   assert.match(sidebarText, /"text": "快照对比"/u);
 
-  // 依赖心智序：shared → utils → judgement-solver → database → prober → assets → analysis → draw
+  // 依赖心智序：shared → utils → judgement-solver → judgement-inference → database → prober → assets → analysis → draw
   assert.deepEqual(
     sidebar.map((item) => item.text),
     [
       "@mai-kit/shared",
       "@mai-kit/utils",
       "@mai-kit/judgement-solver",
+      "@mai-kit/judgement-inference",
       "@mai-kit/database",
       "@mai-kit/prober",
       "@mai-kit/assets",
@@ -177,6 +179,7 @@ void test("key public APIs include usage examples", async () => {
     "@mai-kit/judgement-solver/functions/evaluateJudgementPlan.md",
     "@mai-kit/judgement-solver/functions/solveJudgementLimit.md",
     "@mai-kit/judgement-solver/functions/solveJudgementLimits.md",
+    "@mai-kit/judgement-inference/functions/inferJudgementDistribution.md",
     "@mai-kit/database/classes/DatabaseCache.md",
     "@mai-kit/prober/interfaces/Score.md",
     "@mai-kit/assets/functions/getDefaultFontBuffers.md",
@@ -196,6 +199,7 @@ void test("package pages include usage examples", async () => {
   const prober = await readApi("@mai-kit/prober/index.md");
   const analysis = await readApi("@mai-kit/analysis/index.md");
   const judgementSolver = await readApi("@mai-kit/judgement-solver/index.md");
+  const judgementInference = await readApi("@mai-kit/judgement-inference/index.md");
 
   assert.match(database, /^## 启用缓存$/mu);
   assert.match(draw, /^## 处理 PNG 结果$/mu);
@@ -204,6 +208,7 @@ void test("package pages include usage examples", async () => {
   assert.match(analysis, /^\*\*重算 Best50\*\*$/mu);
   assert.match(judgementSolver, /^## 示例$/mu);
   assert.match(judgementSolver, /^\*\*已有失误后的剩余容错\*\*$/mu);
+  assert.match(judgementInference, /^## 示例$/mu);
 });
 
 void test("cross-package error docs link to shared MaiKitError", async () => {
