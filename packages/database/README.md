@@ -41,11 +41,12 @@ Diving-Fish 适配支持通用的 `getSongList` / `getSong` / `getAsset("jacket"
 ```ts
 const stats = await df.getChartStats();
 const master = stats.charts["11451"]?.[3];
-console.log(master?.fit_diff, master?.avg);
+console.log(master?.diff, master?.fit_diff, master?.avg);
 ```
 
 `getChartStats()` 是适配专属能力：它保留水鱼的拟合难度、平均达成率与成绩分布语义，
-不加入通用 `MaimaiDatabase`。别名、收藏品及 jacket 以外的素材没有对等公开接口，调用
+其中 `diff` 是上游等级文案（如 `"13+"`），数组下标才是难度索引；该方法不加入通用
+`MaimaiDatabase`。别名、收藏品及 jacket 以外的素材没有对等公开接口，调用
 对应通用方法会抛包级 `MaimaiDatabaseNotImplementedError`（可用
 `isMaimaiDatabaseNotImplementedError` 做降级，与 HTTP 失败区分）。
 

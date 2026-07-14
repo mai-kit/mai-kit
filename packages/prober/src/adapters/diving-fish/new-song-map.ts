@@ -34,29 +34,12 @@ export function resetDivingFishIsNewMapCache(): void {
  * @returns 新曲映射
  */
 async function load(http: DivingFishHttp): Promise<ReadonlyMap<number, boolean>> {
-  const raw = await http.musicData();
+  const entries = await http.musicData();
   const map = new Map<number, boolean>();
-  if (!Array.isArray(raw)) {
-    throw new DivingFishProberError({
-      message: "Diving-Fish music_data: expected array",
-    });
-  }
-  for (const item of raw) {
-    if (typeof item !== "object" || item === null || !("id" in item)) {
-      throw invalidMusicData();
-    }
+  for (const item of entries) {
     const id = Number(item.id);
     if (!Number.isSafeInteger(id)) throw invalidMusicData();
-    const basic = "basic_info" in item ? item.basic_info : undefined;
-    if (
-      typeof basic !== "object" ||
-      basic === null ||
-      !("is_new" in basic) ||
-      typeof basic.is_new !== "boolean"
-    ) {
-      throw invalidMusicData();
-    }
-    const isNew = basic.is_new;
+    const isNew = item.basic_info.is_new;
     const existing = map.get(id);
     if (existing !== undefined && existing !== isNew) {
       throw new DivingFishProberError({

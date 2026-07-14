@@ -40,6 +40,74 @@ void test("DatabaseCache coalesces concurrent loads and returns independent JSON
   assert.equal(third.nested.value, 1);
 });
 
+void test("DatabaseCache applies decoders to cached JSON values", async () => {
+  const store = new MemoryCacheStore({ maxEntries: 10 });
+  await store.set("validated", {
+    value: new TextEncoder().encode(JSON.stringify({ value: "invalid" })),
+  });
+  const cache = new DatabaseCache({ store });
+
+  await assert.rejects(
+    cache.json(
+      "validated",
+      async () => ({ value: 1 }),
+      (value) => {
+        if (
+          typeof value !== "object" ||
+          value === null ||
+          !("value" in value) ||
+          typeof value.value !== "number"
+        ) {
+          throw new Error("invalid cached value");
+        }
+        return value.value;
+      },
+    ),
+    /invalid cached value/u,
+  );
+});
+
+void test("DatabaseCache validates loaded JSON before writing it", async () => {
+  const store = new MemoryCacheStore({ maxEntries: 10 });
+  const cache = new DatabaseCache({ store });
+  let loads = 0;
+  const decode = (value: unknown): number => {
+    if (
+      typeof value !== "object" ||
+      value === null ||
+      !("value" in value) ||
+      typeof value.value !== "number"
+    ) {
+      throw new Error("invalid loaded value");
+    }
+    return value.value;
+  };
+
+  await assert.rejects(
+    cache.json(
+      "validate-before-write",
+      async () => {
+        loads += 1;
+        return { value: "invalid" };
+      },
+      decode,
+    ),
+    /invalid loaded value/u,
+  );
+  assert.equal(await store.get("validate-before-write"), undefined);
+
+  const result = await cache.json(
+    "validate-before-write",
+    async () => {
+      loads += 1;
+      return { value: 2 };
+    },
+    decode,
+  );
+  assert.equal(result, 2);
+  assert.equal(loads, 2);
+});
+
 void test("DatabaseCache does not cache failures or share mutable bytes", async () => {
   const store = new MemoryCacheStore({ maxEntries: 10 });
   const cache = new DatabaseCache({ store });
@@ -171,10 +239,22 @@ void test("LxnsMaimaiDatabase enables caching only when cache options are suppli
   let requests = 0;
   globalThis.fetch = async () => {
     requests += 1;
-    return new Response(JSON.stringify({ id: 1, title: "Cached Song" }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        id: 1,
+        title: "Cached Song",
+        artist: "Artist",
+        genre: "maimai",
+        bpm: 180,
+        version: 24_000,
+        difficulties: { standard: [], dx: [], utage: [] },
+        upstream_only: true,
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   };
 
   try {
@@ -185,6 +265,7 @@ void test("LxnsMaimaiDatabase enables caching only when cache options are suppli
     const [first, second] = await Promise.all([cached.getSong(1), cached.getSong(1)]);
     assert.equal(first.title, "Cached Song");
     assert.equal(second.title, "Cached Song");
+    assert.equal("upstream_only" in first, false);
     assert.equal(requests, 1);
 
     const uncached = new LxnsMaimaiDatabase({ baseURL: "https://cache.test/api/v0/" });
