@@ -6,6 +6,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { stopProcess } from "./child-process.mjs";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const dist = resolve(root, "dist");
@@ -187,18 +188,6 @@ async function closeServer(httpServer) {
       else resolveClose();
     });
   });
-}
-
-async function stopProcess(process) {
-  if (process.exitCode !== null) return;
-  process.kill("SIGTERM");
-  await Promise.race([
-    new Promise((resolveExit) => process.once("exit", resolveExit)),
-    delay(2_000).then(() => {
-      if (process.exitCode === null) process.kill("SIGKILL");
-      return undefined;
-    }),
-  ]);
 }
 
 async function delay(ms) {
