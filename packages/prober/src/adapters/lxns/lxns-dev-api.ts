@@ -66,31 +66,41 @@ export class LxnsDevApi implements LxnsDevClient {
 
   async getPlayerByQQ(qq: number): Promise<LxnsDevPlayer> {
     const profile = await this.http.get<PlayerProfile>(`player/qq/${qq}`);
-    const friendCode = profile.friend_code;
-    if (typeof friendCode !== "number" || !Number.isSafeInteger(friendCode)) {
-      throw new LxnsProberError({
-        message: "Lxns player resolved by QQ is missing a valid friend_code",
-      });
-    }
-    return new LxnsDevPlayerImpl(this.http, friendCode, profile);
+    return new LxnsDevPlayerImpl(this.http, profile);
   }
 }
 
 /** 绑定好友码后的 LXNS 开发者玩家实现。 */
 class LxnsDevPlayerImpl implements LxnsDevPlayer {
+  private readonly friendCode: number;
   private profilePromise?: Promise<PlayerProfile>;
 
   constructor(
     private readonly http: LxnsHttp,
-    private readonly friendCode: number,
-    profile?: PlayerProfile,
+    player: number | PlayerProfile,
   ) {
-    if (profile) this.profilePromise = Promise.resolve(profile);
+    const friendCode = typeof player === "number" ? player : player.friend_code;
+    if (typeof friendCode !== "number" || !Number.isSafeInteger(friendCode)) {
+      throw new LxnsProberError({
+        message: "Lxns player binding requires a valid friend_code",
+      });
+    }
+    this.friendCode = friendCode;
+    if (typeof player !== "number") this.profilePromise = Promise.resolve(player);
   }
 
   async getProfile(): Promise<PlayerProfile> {
-    this.profilePromise ??= this.http.get<PlayerProfile>(`player/${this.friendCode}`);
-    return this.profilePromise;
+    const request = (this.profilePromise ??= this.http.get<PlayerProfile>(
+      `player/${this.friendCode}`,
+    ));
+    try {
+      return await request;
+    } catch (error) {
+      if (this.profilePromise === request) {
+        this.profilePromise = undefined;
+      }
+      throw error;
+    }
   }
 
   async getBest(key: ScoreKey): Promise<Score> {

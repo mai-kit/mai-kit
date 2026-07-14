@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createLxnsClient, LevelIndex } from "@mai-kit/prober";
+import { createLxnsClient, isLxnsProberError, LevelIndex } from "@mai-kit/prober";
 
 function assertConditionalApi(): void {
   const personal = createLxnsClient({ personalAccessToken: "token" }).me();
@@ -53,8 +53,10 @@ void test("LXNS personal player exposes actual read-only personal endpoints", as
     assert.equal(request.headers.get("X-User-Token"), "personal-token");
 
     if (url.pathname.endsWith("/player/scores/export/csv")) {
+      assert.equal(request.headers.get("Accept"), "*/*");
       return new Response("id,title\n1,Song\n", { headers: { "Content-Type": "text/csv" } });
     }
+    assert.equal(request.headers.get("Accept"), "application/json");
     if (url.pathname.endsWith("/player/scores")) {
       return lxnsResponse([score, { ...score, id: 2, song_name: "Other", type: "standard" }]);
     }
@@ -104,6 +106,17 @@ void test("LXNS personal player exposes actual read-only personal endpoints", as
       (await player.getScores({ songName: "Other", songType: "standard" })).map((item) => item.id),
       [2],
     );
+    assert.equal(requests.at(-1)?.searchParams.get("song_type"), "standard");
+    assert.equal(requests.at(-1)?.searchParams.has("song_name"), false);
+    assert.deepEqual(
+      (await player.getScores({ songId: 1, songType: "dx", levelIndex: LevelIndex.MASTER })).map(
+        (item) => item.id,
+      ),
+      [1],
+    );
+    assert.equal(requests.at(-1)?.searchParams.get("song_id"), "1");
+    assert.equal(requests.at(-1)?.searchParams.get("song_type"), "dx");
+    assert.equal(requests.at(-1)?.searchParams.get("level_index"), "3");
     assert.deepEqual(await player.getBests({ songName: "Song" }), [score]);
     assert.equal(requests.at(-1)?.searchParams.get("song_name"), "Song");
     assert.equal(
@@ -138,6 +151,9 @@ void test("LXNS developer client binds players and preserves endpoint capabiliti
 
     if (url.pathname.endsWith("/player/qq/123")) {
       return lxnsResponse({ name: "QQ", rating: 15_000, friend_code: 9876543210 });
+    }
+    if (url.pathname.endsWith("/player/qq/456")) {
+      return lxnsResponse({ name: "Invalid QQ", rating: 15_000 });
     }
     if (url.pathname.endsWith("/player/9876543210")) {
       throw new Error("getPlayerByQQ should reuse the resolved profile");
@@ -204,6 +220,85 @@ void test("LXNS developer client binds players and preserves endpoint capabiliti
 
     const byQQ = await client.getPlayerByQQ(123);
     assert.equal((await byQQ.getProfile()).friend_code, 9876543210);
+    await assert.rejects(
+      client.getPlayerByQQ(456),
+      (error) =>
+        isLxnsProberError(error) &&
+        error.message === "Lxns player binding requires a valid friend_code",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+void test("LXNS developer player validates bindings and retries a failed profile request", async () => {
+  const originalFetch = globalThis.fetch;
+  let attempts = 0;
+  globalThis.fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    const url = new URL(request.url);
+    if (!url.pathname.endsWith("/player/1234567890")) {
+      throw new Error(`Unexpected request: ${url.href}`);
+    }
+    attempts += 1;
+    if (attempts === 1) throw new Error("temporary network failure");
+    return lxnsResponse({ name: "FC", rating: 15_000, friend_code: 1234567890 });
+  };
+
+  try {
+    const client = createLxnsClient({
+      devAccessToken: "dev-token",
+      baseURL: "https://example.test/api/v0/",
+    });
+    assert.throws(
+      () => client.getPlayer(Number.NaN),
+      (error) =>
+        isLxnsProberError(error) &&
+        error.message === "Lxns player binding requires a valid friend_code",
+    );
+    assert.throws(
+      () => client.getPlayer(Number.POSITIVE_INFINITY),
+      (error) =>
+        isLxnsProberError(error) &&
+        error.message === "Lxns player binding requires a valid friend_code",
+    );
+
+    const player = client.getPlayer(1234567890);
+    await assert.rejects(
+      player.getProfile(),
+      (error) => isLxnsProberError(error) && error.message.includes("temporary network failure"),
+    );
+    assert.equal((await player.getProfile()).friend_code, 1234567890);
+    assert.equal(attempts, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+void test("LXNS binary requests reject +json error responses", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    assert.equal(request.headers.get("Accept"), "*/*");
+    return new Response(
+      JSON.stringify({ success: false, code: 422, message: "export unavailable" }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/problem+json; charset=utf-8" },
+      },
+    );
+  };
+
+  try {
+    const player = createLxnsClient({
+      personalAccessToken: "personal-token",
+      baseURL: "https://example.test/api/v0/",
+    }).me();
+    await assert.rejects(
+      player.exportScores(),
+      (error) =>
+        isLxnsProberError(error) && error.code === 422 && error.message === "export unavailable",
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

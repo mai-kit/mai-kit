@@ -27,6 +27,11 @@ function isLxnsEnvelope(body: unknown): body is LxnsEnvelope<unknown> {
   return typeof body.success === "boolean";
 }
 
+function isJsonContentType(contentType: string): boolean {
+  const mediaType = contentType.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+  return mediaType === "application/json" || mediaType.endsWith("+json");
+}
+
 export interface LxnsHttpOptions extends HttpResilienceOptions {
   baseURL: string;
   /** 路径前缀，dev 为 "maimai/"，personal 为 "user/maimai/" */
@@ -72,13 +77,13 @@ export class LxnsHttp {
     return url;
   }
 
-  private async request(url: URL): Promise<Response> {
+  private async request(url: URL, accept = "application/json"): Promise<Response> {
     let response: Response;
     try {
       response = await fetchWithResilience(
         url,
         {
-          headers: { Accept: "application/json", ...this.options.headers },
+          headers: { ...this.options.headers, Accept: accept },
         },
         { timeoutMs: this.options.timeoutMs, retries: this.options.retries },
       );
@@ -136,9 +141,9 @@ export class LxnsHttp {
   }
 
   private async getBytesOnce(url: URL): Promise<Uint8Array> {
-    const response = await this.request(url);
+    const response = await this.request(url, "*/*");
     const contentType = response.headers.get("content-type") ?? "";
-    if (!response.ok || contentType.includes("application/json")) {
+    if (!response.ok || isJsonContentType(contentType)) {
       const text = await response.text();
       let body: unknown;
       if (text) {

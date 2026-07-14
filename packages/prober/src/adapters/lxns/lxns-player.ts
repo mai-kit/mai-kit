@@ -22,8 +22,18 @@ import type {
   ScoreRankingEntry,
   SongScoreQuery,
 } from "../../models";
-import { filterScores } from "../../score-query";
+import { assertScoreQuery, filterScores } from "../../score-query";
 import { LxnsHttp, scoreSearchParams } from "./lxns-http";
+
+/** 个人成绩列表仅下推稳定的结构化筛选；曲名仍由本地精确匹配。 */
+function scoreListSearchParams(query: ScoreQuery): Record<string, string | number> {
+  assertScoreQuery(query);
+  const params: Record<string, string | number> = {};
+  if (query.songId !== undefined) params.song_id = query.songId;
+  if (query.songType !== undefined) params.song_type = query.songType;
+  if (query.levelIndex !== undefined) params.level_index = query.levelIndex;
+  return params;
+}
 
 /** LXNS 年度总结；上游会按年份增加额外统计字段。 */
 export interface LxnsYearInReview {
@@ -84,7 +94,10 @@ export class LxnsPersonalPlayerImpl implements LxnsPersonalPlayer {
   }
 
   async getScores(query?: ScoreQuery): Promise<Score[]> {
-    const scores = await this.http.get<Score[]>("player/scores");
+    const scores = await this.http.get<Score[]>(
+      "player/scores",
+      query ? scoreListSearchParams(query) : undefined,
+    );
     return filterScores(scores, query);
   }
 
