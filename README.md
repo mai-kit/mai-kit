@@ -50,6 +50,6 @@ GPL-3.0-only 发布，并保持为不被其他库包依赖的可选叶子包。
 
 ## 文档
 
-- [使用指南](https://wsyzxjn.github.io/mai-kit/guide/getting-started)
-- [API 参考](https://wsyzxjn.github.io/mai-kit/api/)
-- [各包职责与组合方式](https://wsyzxjn.github.io/mai-kit/guide/architecture)
+- [使用指南](https://mai-kit.github.io/mai-kit/guide/getting-started)
+- [API 参考](https://mai-kit.github.io/mai-kit/api/)
+- [各包职责与组合方式](https://mai-kit.github.io/mai-kit/guide/architecture)

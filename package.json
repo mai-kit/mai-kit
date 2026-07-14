@@ -5,7 +5,7 @@
   "description": "舞萌 DX TypeScript 工具集。",
   "repository": {
     "type": "git",
-    "url": "https://github.com/wsyzxjn/mai-kit.git"
+    "url": "https://github.com/mai-kit/mai-kit.git"
   },
   "type": "module",
   "scripts": {
