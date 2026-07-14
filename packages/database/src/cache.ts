@@ -321,15 +321,33 @@ export class DatabaseCache {
   }
 
   /** 读取 JSON 缓存；未命中时调用 `load` 并写回。 */
-  async json<T>(key: string, load: () => Promise<T>): Promise<T> {
-    const bytes = await this.getOrLoad(key, async () => encodeJson(await load()));
+  async json<T>(key: string, load: () => Promise<T>): Promise<T>;
+  /** 读取 JSON 缓存，并用 `decode` 校验缓存命中与新加载值。 */
+  async json<T>(
+    key: string,
+    load: () => Promise<unknown>,
+    decode: (value: unknown) => T,
+  ): Promise<T>;
+  async json<T>(
+    key: string,
+    load: () => Promise<unknown>,
+    decode?: (value: unknown) => T,
+  ): Promise<T> {
+    const bytes = await this.getOrLoad(key, async () => {
+      const loaded = await load();
+      if (decode) decode(loaded);
+      return encodeJson(loaded);
+    });
+    let value: unknown;
     try {
-      // 缓存内容由对应适配器的加载函数编码，类型与调用点的 T 一致。
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return JSON.parse(new TextDecoder().decode(bytes)) as T;
+      value = JSON.parse(new TextDecoder().decode(bytes));
     } catch (error) {
       throw cacheError(`Failed to decode database cache entry ${key}`, error);
     }
+    if (decode) return decode(value);
+    // 无 decoder 的公共兼容入口由调用方保证加载值类型；内置适配器均传 decoder。
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    return value as T;
   }
 
   /** 读取二进制缓存；未命中时调用 `load` 并写回。 */

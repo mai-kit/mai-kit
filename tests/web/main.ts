@@ -5,6 +5,7 @@ import {
 } from "../../packages/assets/dist/index.js";
 import { LevelIndex, LxnsMaimaiDatabase } from "../../packages/database/dist/index.js";
 import { Draw } from "../../packages/draw/dist/index.js";
+import { createLxnsClient } from "../../packages/prober/dist/index.js";
 import {
   evaluateJudgementPlan,
   JUDGEMENT_TARGETS,
@@ -29,6 +30,7 @@ interface SmokeResult {
   solverRemaining?: number;
   solverTargetCount?: number;
   solverMixedSatisfied?: boolean;
+  proberRating?: number;
 }
 
 window.maiKitSmoke = { status: "running" };
@@ -50,6 +52,7 @@ async function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
 }
 
 try {
+  const proberProfile = await withTimeout(loadMockLxnsProfile(), "prober schema validation");
   const badge = getRateBadge("sssp");
   const [{ notoSansSc, comfortaa }, wasm] = await withTimeout(
     Promise.all([getDefaultFontBuffers(), getResvgWasmBytes()]),
@@ -121,6 +124,7 @@ try {
     solverRemaining: solverLimit.remainingCount,
     solverTargetCount: solverLimits.length,
     solverMixedSatisfied: solverMixed.satisfied,
+    proberRating: proberProfile.rating,
   };
   document.querySelector("#status")?.replaceChildren("ok");
   document.querySelector("#result")?.replaceChildren(JSON.stringify(window.maiKitSmoke));
@@ -129,4 +133,34 @@ try {
   window.maiKitSmoke = { status: "error", message };
   document.querySelector("#status")?.replaceChildren(message);
   document.querySelector("#result")?.replaceChildren(JSON.stringify(window.maiKitSmoke));
+}
+
+async function loadMockLxnsProfile() {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        success: true,
+        code: 200,
+        data: {
+          name: "Web Smoke",
+          rating: 15_000,
+          friend_code: 123456789,
+          course_rank: 10,
+          class_rank: 5,
+          star: 2,
+        },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  try {
+    return await createLxnsClient({
+      personalAccessToken: "web-smoke",
+      baseURL: "https://example.test/api/v0/",
+    })
+      .me()
+      .getProfile();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 }

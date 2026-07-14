@@ -1,52 +1,7 @@
 import { LevelIndex } from "@mai-kit/shared";
 import type { Notes, Song, SongDifficulty, SongList } from "../../models";
 import { DivingFishDatabaseError } from "./error";
-
-/**
- * Diving-Fish `/music_data` 数组元素（字段名与上游 JSON 一致）。
- *
- * @example
- * ```ts
- * const entry: DivingFishMusicEntry = {
- *   id: "11451",
- *   title: "曲名",
- *   type: "DX",
- *   ds: [4, 7, 10, 13, 14.7],
- *   level: ["4", "7", "10", "13", "14+"],
- *   charts: [{ notes: [100, 20, 10, 5, 2], charter: "Charter" }],
- *   basic_info: { artist: "艺术家", genre: "maimai", bpm: 180 },
- * };
- * ```
- */
-export interface DivingFishMusicEntry {
-  /** 曲目 id（上游为整数；映射器同时接受数字字符串） */
-  id: string | number;
-  /** 曲名 */
-  title: string;
-  /** `DX` 或 `SD` */
-  type: string;
-  /** 各难度定数（Basic → Re:Master） */
-  ds: number[];
-  /** 各难度等级文案 */
-  level: string[];
-  /** 各难度谱面（含 notes / charter） */
-  charts: Array<{ notes: number[]; charter?: string }>;
-  /** 基础信息 */
-  basic_info?: {
-    /** 上游基础信息中的曲名 */
-    title?: string;
-    /** 艺术家 */
-    artist?: string;
-    /** 流派 */
-    genre?: string;
-    /** BPM */
-    bpm?: number;
-    /** 收录版本原文 */
-    from?: string;
-    /** 是否当前版本新曲 */
-    is_new?: boolean;
-  };
-}
+import type { DivingFishMusicEntry } from "./schemas";
 
 /**
  * 封面文件名用 id：不足 5 位补零；10001–11000 的 DX 与 SD 共封面时用 id−10000。
@@ -200,7 +155,6 @@ export function mapDivingFishMusicDataToSongList(
   const byId = new Map<number, Song>();
 
   for (const entry of entries) {
-    assertDivingFishMusicEntry(entry);
     if (typeof entry.id === "string" && entry.id.trim().length === 0) {
       throw invalidField("music_data.id", entry.id);
     }
@@ -258,54 +212,6 @@ export function mapDivingFishMusicDataToSongList(
 
 function isNonNegativeInteger(value: number): boolean {
   return Number.isInteger(value) && value >= 0;
-}
-
-function assertDivingFishMusicEntry(value: unknown): asserts value is DivingFishMusicEntry {
-  if (!isRecord(value)) throw invalidField("music_data[]", value);
-  if (typeof value.id !== "string" && typeof value.id !== "number") {
-    throw invalidField("music_data.id", value.id);
-  }
-  if (typeof value.title !== "string") throw invalidField("music_data.title", value.title);
-  if (typeof value.type !== "string") throw invalidField("music_data.type", value.type);
-  if (!Array.isArray(value.ds) || !value.ds.every((item) => typeof item === "number")) {
-    throw invalidField("music_data.ds", value.ds);
-  }
-  if (!Array.isArray(value.level) || !value.level.every((item) => typeof item === "string")) {
-    throw invalidField("music_data.level", value.level);
-  }
-  if (!Array.isArray(value.charts) || !value.charts.every(isDivingFishChart)) {
-    throw invalidField("music_data.charts", value.charts);
-  }
-  if (value.basic_info !== undefined && !isDivingFishBasicInfo(value.basic_info)) {
-    throw invalidField("music_data.basic_info", value.basic_info);
-  }
-}
-
-function isDivingFishChart(value: unknown): value is DivingFishMusicEntry["charts"][number] {
-  return (
-    isRecord(value) &&
-    Array.isArray(value.notes) &&
-    value.notes.every((item) => typeof item === "number") &&
-    (value.charter === undefined || typeof value.charter === "string")
-  );
-}
-
-function isDivingFishBasicInfo(
-  value: unknown,
-): value is NonNullable<DivingFishMusicEntry["basic_info"]> {
-  return (
-    isRecord(value) &&
-    (value.title === undefined || typeof value.title === "string") &&
-    (value.artist === undefined || typeof value.artist === "string") &&
-    (value.genre === undefined || typeof value.genre === "string") &&
-    (value.bpm === undefined || typeof value.bpm === "number") &&
-    (value.from === undefined || typeof value.from === "string") &&
-    (value.is_new === undefined || typeof value.is_new === "boolean")
-  );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function requiredTrimmedString(value: unknown, field: string): string {

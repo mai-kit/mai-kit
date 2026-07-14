@@ -7,9 +7,9 @@ import {
   mapDivingFishProfile,
   mapDivingFishRecord,
 } from "./mappers";
-import { DivingFishProberError } from "./error";
 import { getDivingFishIsNewMap } from "./new-song-map";
-import type { DivingFishPlayerPayload, DivingFishPlayerQuery } from "./types";
+import type { DivingFishQueryPlayerPayload, DivingFishRecordsPlayerPayload } from "./schemas";
+import type { DivingFishPlayerQuery } from "./types";
 
 interface DivingFishPlayerData {
   profile: PlayerProfile;
@@ -40,7 +40,7 @@ export class DivingFishPlayer<
    * @param payload - 含 `charts.dx` / `charts.sd` 的响应
    * @returns 只提供档案与 Best50 的玩家查询对象
    */
-  static fromQueryPayload(payload: DivingFishPlayerPayload): DivingFishPlayer {
+  static fromQueryPayload(payload: DivingFishQueryPlayerPayload): DivingFishPlayer {
     const profile = mapDivingFishProfile(payload);
     const bests = mapDivingFishBestsFromCharts(payload);
     return new DivingFishPlayer(async () => ({ profile, bests }));
@@ -82,7 +82,7 @@ export class DivingFishScoresPlayer
    */
   static fromRecordsPayload(
     http: DivingFishHttp,
-    payload: DivingFishPlayerPayload,
+    payload: DivingFishRecordsPlayerPayload,
   ): DivingFishScoresPlayer {
     return new DivingFishScoresPlayer(async () => buildRecordsData(http, payload));
   }
@@ -135,14 +135,9 @@ export class DivingFishScoresPlayer
 
 async function buildRecordsData(
   http: DivingFishHttp,
-  payload: DivingFishPlayerPayload,
+  payload: DivingFishRecordsPlayerPayload,
 ): Promise<DivingFishScoresPlayerData> {
   const isNew = await getDivingFishIsNewMap(http);
-  if (!Array.isArray(payload.records)) {
-    throw new DivingFishProberError({
-      message: "Diving-Fish records response is missing records",
-    });
-  }
   const records = payload.records;
   return {
     profile: mapDivingFishProfile(payload),

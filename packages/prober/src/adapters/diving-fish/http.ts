@@ -1,10 +1,18 @@
 import { DivingFishProberError } from "./error";
 import type {
-  DivingFishPlayerPayload,
-  DivingFishPlayerQuery,
-  DivingFishRatingRankEntry,
-} from "./types";
+  DivingFishNewSongEntry,
+  DivingFishQueryPlayerPayload,
+  DivingFishRecordsPlayerPayload,
+} from "./schemas";
+import {
+  newSongDataSchema,
+  queryPlayerPayloadSchema,
+  ratingRankingSchema,
+  recordsPlayerPayloadSchema,
+} from "./schemas";
+import type { DivingFishPlayerQuery, DivingFishRatingRankEntry } from "./types";
 import { fetchWithResilience, RequestCoalescer, type HttpResilienceOptions } from "@mai-kit/shared";
+import type * as z from "zod/mini";
 
 /** Diving-Fish maimaidxprober API 默认根地址 */
 export const DIVING_FISH_DEFAULT_BASE_URL = "https://www.diving-fish.com/api/maimaidxprober/";
@@ -49,15 +57,14 @@ export class DivingFishHttp {
    * @returns 含 `charts.dx` / `charts.sd` 的玩家载荷
    * @throws {DivingFishProberError} 网络失败、用户不存在、隐私限制等
    */
-  async queryPlayer(query: DivingFishPlayerQuery): Promise<DivingFishPlayerPayload> {
-    const body = await this.requestJson<unknown>("query/player", {
+  async queryPlayer(query: DivingFishPlayerQuery): Promise<DivingFishQueryPlayerPayload> {
+    return this.requestJson("query/player", queryPlayerPayloadSchema, {
       method: "POST",
       body: {
         ...queryIdentity(query),
         b50: true,
       },
     });
-    return parsePlayerPayload(body, "query/player", "charts");
   }
 
   /**
@@ -66,9 +73,8 @@ export class DivingFishHttp {
    * @returns 完整成绩载荷
    * @throws {DivingFishProberError} 网络或 HTTP 错误
    */
-  async testData(): Promise<DivingFishPlayerPayload> {
-    const body = await this.requestJson<unknown>("player/test_data");
-    return parsePlayerPayload(body, "player/test_data", "records");
+  async testData(): Promise<DivingFishRecordsPlayerPayload> {
+    return this.requestJson("player/test_data", recordsPlayerPayloadSchema);
   }
 
   /**
@@ -77,14 +83,13 @@ export class DivingFishHttp {
    * @returns 含 `records` 的玩家载荷
    * @throws {DivingFishProberError} 未配置 `importToken`、token 无效、网络错误
    */
-  async importRecords(): Promise<DivingFishPlayerPayload> {
+  async importRecords(): Promise<DivingFishRecordsPlayerPayload> {
     if (!this.importToken) {
       throw new DivingFishProberError({ message: "importToken is required for /player/records" });
     }
-    const body = await this.requestJson<unknown>("player/records", {
+    return this.requestJson("player/records", recordsPlayerPayloadSchema, {
       headers: { "Import-Token": this.importToken },
     });
-    return parsePlayerPayload(body, "player/records", "records");
   }
 
   /**
@@ -94,17 +99,16 @@ export class DivingFishHttp {
    * @returns 含 `records` 的玩家载荷
    * @throws {DivingFishProberError} 未配置 `developerToken`、用户不存在、网络错误
    */
-  async devRecords(query: DivingFishPlayerQuery): Promise<DivingFishPlayerPayload> {
+  async devRecords(query: DivingFishPlayerQuery): Promise<DivingFishRecordsPlayerPayload> {
     if (!this.developerToken) {
       throw new DivingFishProberError({
         message: "developerToken is required for /dev/player/records",
       });
     }
-    const body = await this.requestJson<unknown>("dev/player/records", {
+    return this.requestJson("dev/player/records", recordsPlayerPayloadSchema, {
       headers: { "Developer-Token": this.developerToken },
       query: queryIdentity(query),
     });
-    return parsePlayerPayload(body, "dev/player/records", "records");
   }
 
   /**
@@ -113,8 +117,8 @@ export class DivingFishHttp {
    * @returns 上游 JSON（通常为曲目数组）
    * @throws {DivingFishProberError} 网络或 HTTP 错误
    */
-  async musicData(): Promise<unknown> {
-    return this.requestJson<unknown>("music_data");
+  async musicData(): Promise<DivingFishNewSongEntry[]> {
+    return this.requestJson("music_data", newSongDataSchema);
   }
 
   /**
@@ -124,13 +128,7 @@ export class DivingFishHttp {
    * @throws {DivingFishProberError} 网络、HTTP 或响应结构错误
    */
   async ratingRanking(): Promise<DivingFishRatingRankEntry[]> {
-    const body = await this.requestJson<unknown>("rating_ranking");
-    if (!Array.isArray(body) || !body.every(isRatingRankEntry)) {
-      throw new DivingFishProberError({
-        message: "Diving-Fish rating_ranking: unexpected response structure",
-      });
-    }
-    return body;
+    return this.requestJson("rating_ranking", ratingRankingSchema);
   }
 
   /**
@@ -141,6 +139,7 @@ export class DivingFishHttp {
    */
   private async requestJson<T>(
     path: string,
+    schema: z.ZodMiniType<T>,
     init: {
       method?: "GET" | "POST";
       headers?: Record<string, string>;
@@ -216,8 +215,15 @@ export class DivingFishHttp {
         });
       }
 
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return body as T;
+      const parsed = schema.safeParse(body);
+      if (!parsed.success) {
+        throw new DivingFishProberError({
+          status: response.status,
+          message: `Diving-Fish ${path}: unexpected response structure (${formatIssues(parsed.error.issues)})`,
+          cause: parsed.error,
+        });
+      }
+      return parsed.data;
     });
   }
 }
@@ -233,92 +239,13 @@ function queryIdentity(query: DivingFishPlayerQuery): Record<string, string | nu
   return { qq: query.qq };
 }
 
-function isRatingRankEntry(value: unknown): value is DivingFishRatingRankEntry {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "username" in value &&
-    typeof value.username === "string" &&
-    "ra" in value &&
-    typeof value.ra === "number" &&
-    Number.isFinite(value.ra)
-  );
-}
-
-function parsePlayerPayload(
-  value: unknown,
-  endpoint: string,
-  mode: "charts" | "records",
-): DivingFishPlayerPayload {
-  if (!isRecord(value) || typeof value.rating !== "number" || !Number.isFinite(value.rating)) {
-    throw unexpectedPlayerPayload(endpoint);
-  }
-  if (value.nickname !== undefined && typeof value.nickname !== "string") {
-    throw unexpectedPlayerPayload(endpoint);
-  }
-  if (value.username !== undefined && typeof value.username !== "string") {
-    throw unexpectedPlayerPayload(endpoint);
-  }
-  if (
-    value.additional_rating !== undefined &&
-    (typeof value.additional_rating !== "number" || !Number.isFinite(value.additional_rating))
-  ) {
-    throw unexpectedPlayerPayload(endpoint);
-  }
-  if (value.plate !== undefined && typeof value.plate !== "string") {
-    throw unexpectedPlayerPayload(endpoint);
-  }
-
-  if (mode === "records") {
-    if (!Array.isArray(value.records) || !value.records.every(isDivingFishRecord)) {
-      throw unexpectedPlayerPayload(endpoint);
-    }
-  } else {
-    if (
-      !isRecord(value.charts) ||
-      !Array.isArray(value.charts.dx) ||
-      !Array.isArray(value.charts.sd) ||
-      !value.charts.dx.every(isDivingFishRecord) ||
-      !value.charts.sd.every(isDivingFishRecord)
-    ) {
-      throw unexpectedPlayerPayload(endpoint);
-    }
-  }
-
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  return value as unknown as DivingFishPlayerPayload;
-}
-
-function isDivingFishRecord(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    typeof value.achievements === "number" &&
-    Number.isFinite(value.achievements) &&
-    typeof value.ds === "number" &&
-    Number.isFinite(value.ds) &&
-    typeof value.dxScore === "number" &&
-    Number.isFinite(value.dxScore) &&
-    typeof value.fc === "string" &&
-    typeof value.fs === "string" &&
-    typeof value.level === "string" &&
-    typeof value.level_index === "number" &&
-    Number.isInteger(value.level_index) &&
-    typeof value.ra === "number" &&
-    Number.isFinite(value.ra) &&
-    typeof value.rate === "string" &&
-    typeof value.song_id === "number" &&
-    Number.isFinite(value.song_id) &&
-    typeof value.title === "string" &&
-    typeof value.type === "string"
-  );
-}
-
-function unexpectedPlayerPayload(endpoint: string): DivingFishProberError {
-  return new DivingFishProberError({
-    message: `Diving-Fish ${endpoint}: unexpected response structure`,
-  });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+function formatIssues(
+  issues: readonly { path: readonly PropertyKey[]; message: string }[],
+): string {
+  return issues
+    .slice(0, 3)
+    .map(
+      (issue) => `${issue.path.length > 0 ? issue.path.join(".") : "response"}: ${issue.message}`,
+    )
+    .join("; ");
 }

@@ -31,7 +31,7 @@ export class LxnsHttp {
     this.resilience = { timeoutMs: options.timeoutMs, retries: options.retries };
   }
 
-  async get<T>(path: string, params?: QueryParams): Promise<T> {
+  async get(path: string, params?: QueryParams): Promise<unknown> {
     const url = new URL(`maimai/${path}`, this.baseURL);
     if (params) {
       for (const [key, value] of Object.entries(params)) {
@@ -41,10 +41,10 @@ export class LxnsHttp {
       }
     }
 
-    return this.coalescer.run(`GET ${url.href}`, async () => this.getOnce<T>(url));
+    return this.coalescer.run(`GET ${url.href}`, async () => this.getOnce(url));
   }
 
-  private async getOnce<T>(url: URL): Promise<T> {
+  private async getOnce(url: URL): Promise<unknown> {
     let response: Response;
     try {
       response = await fetchWithResilience(
@@ -91,7 +91,6 @@ export class LxnsHttp {
       });
     }
 
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    return body as T;
+    return body;
   }
 }

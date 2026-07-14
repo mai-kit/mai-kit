@@ -1,4 +1,4 @@
-import { DivingFishDatabaseError } from "./error";
+import { divingFishChartStatsSchema, parseDivingFishResponse } from "./schemas";
 
 /** 水鱼按难度汇总的全站成绩统计。 */
 export interface DivingFishDifficultyStats {
@@ -51,66 +51,18 @@ export interface DivingFishChartStats {
  * @throws {DivingFishDatabaseError} 响应结构不符合公开接口
  */
 export function mapDivingFishChartStats(value: unknown): DivingFishChartStats {
-  if (!isRecord(value) || !isRecord(value.charts) || !isRecord(value.diff_data)) {
-    throw malformed();
-  }
+  const parsed = parseDivingFishResponse(divingFishChartStatsSchema, value, "chart_stats");
 
   const charts: DivingFishChartStats["charts"] = {};
-  for (const [songId, entries] of Object.entries(value.charts)) {
-    if (!Array.isArray(entries)) throw malformed();
-    charts[songId] = entries.map((entry) => {
-      if (isRecord(entry) && Object.keys(entry).length === 0) return null;
-      if (!isChartStat(entry)) throw malformed();
-      return entry;
-    });
+  for (const [songId, entries] of Object.entries(parsed.charts)) {
+    charts[songId] = entries.map((entry) => (isEmptyChartStat(entry) ? null : entry));
   }
 
-  const diffData: DivingFishChartStats["diff_data"] = {};
-  for (const [difficulty, entry] of Object.entries(value.diff_data)) {
-    if (!isDifficultyStats(entry)) throw malformed();
-    diffData[difficulty] = entry;
-  }
-
-  return { charts, diff_data: diffData };
+  return { charts, diff_data: parsed.diff_data };
 }
 
-function isChartStat(value: unknown): value is DivingFishChartStat {
-  return (
-    isRecord(value) &&
-    isFiniteNumber(value.cnt) &&
-    isFiniteNumber(value.diff) &&
-    isFiniteNumber(value.fit_diff) &&
-    isFiniteNumber(value.avg) &&
-    isFiniteNumber(value.avg_dx) &&
-    isFiniteNumber(value.std_dev) &&
-    isNumberArray(value.dist) &&
-    isNumberArray(value.fc_dist)
-  );
-}
-
-function isDifficultyStats(value: unknown): value is DivingFishDifficultyStats {
-  return (
-    isRecord(value) &&
-    isFiniteNumber(value.achievements) &&
-    isNumberArray(value.dist) &&
-    isNumberArray(value.fc_dist)
-  );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
-function isNumberArray(value: unknown): value is number[] {
-  return Array.isArray(value) && value.every(isFiniteNumber);
-}
-
-function malformed(): DivingFishDatabaseError {
-  return new DivingFishDatabaseError({
-    message: "Diving-Fish chart_stats: unexpected response structure",
-  });
+function isEmptyChartStat(
+  value: Record<string, never> | DivingFishChartStat,
+): value is Record<string, never> {
+  return Object.keys(value).length === 0;
 }

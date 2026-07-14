@@ -23,11 +23,12 @@ import { MaimaiDatabaseNotImplementedError } from "../../error";
 import { fetchWithResilience, RequestCoalescer, type HttpResilienceOptions } from "@mai-kit/shared";
 import { mapDivingFishChartStats, type DivingFishChartStats } from "./chart-stats";
 import { DivingFishDatabaseError } from "./error";
+import { divingFishCoverId, mapDivingFishMusicDataToSongList } from "./map-songs";
 import {
-  divingFishCoverId,
-  mapDivingFishMusicDataToSongList,
+  divingFishMusicDataSchema,
+  parseDivingFishResponse,
   type DivingFishMusicEntry,
-} from "./map-songs";
+} from "./schemas";
 
 /** Diving-Fish 曲目 API 默认根地址 */
 export const DIVING_FISH_DEFAULT_BASE_URL = "https://www.diving-fish.com/api/maimaidxprober/";
@@ -106,10 +107,7 @@ export class DivingFishMaimaiDatabase implements MaimaiDatabase {
       const entries = await this.fetchMusicData();
       return mapDivingFishMusicDataToSongList(entries, { notes: query?.notes });
     };
-    if (this.cache) {
-      return this.cache.json(`df-song-list:${query?.notes ? 1 : 0}`, load);
-    }
-    // notes 只影响是否填充 notes；无 cache 时对无 notes 请求复用内存
+    // notes 只影响映射结果；原始 music_data 由 fetchMusicData 统一缓存。
     if (query?.notes) return load();
     this.songListCache ??= load();
     return this.songListCache;
@@ -153,12 +151,11 @@ export class DivingFishMaimaiDatabase implements MaimaiDatabase {
    * ```
    */
   async getChartStats(): Promise<DivingFishChartStats> {
-    const load = async () => {
-      const body = await this.fetchJson("chart_stats");
-      return mapDivingFishChartStats(body);
-    };
-    if (this.cache) return this.cache.json("df-chart-stats", load);
-    return load();
+    const load = async () => this.fetchJson("chart_stats");
+    if (this.cache) {
+      return this.cache.json("df:raw:chart-stats:v1", load, mapDivingFishChartStats);
+    }
+    return mapDivingFishChartStats(await load());
   }
 
   /**
@@ -277,12 +274,11 @@ export class DivingFishMaimaiDatabase implements MaimaiDatabase {
    * @throws {DivingFishDatabaseError} 网络、HTTP 或非数组响应
    */
   private async fetchMusicData(): Promise<DivingFishMusicEntry[]> {
-    const body = await this.fetchJson("music_data");
-    if (!Array.isArray(body)) {
-      throw new DivingFishDatabaseError({ message: "Diving-Fish music_data: expected array" });
-    }
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    return body as DivingFishMusicEntry[];
+    const load = async () => this.fetchJson("music_data");
+    const decode = (value: unknown) =>
+      parseDivingFishResponse(divingFishMusicDataSchema, value, "music_data");
+    if (this.cache) return this.cache.json("df:raw:music-data:v1", load, decode);
+    return decode(await load());
   }
 
   /**

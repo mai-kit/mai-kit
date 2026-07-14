@@ -17,17 +17,28 @@ import { fetchWithResilience, RequestCoalescer, type HttpResilienceOptions } fro
 import { getLocalChartTags } from "../../chart-tags";
 import { LxnsDatabaseError } from "./error";
 import { LxnsHttp } from "./lxns-http";
+import {
+  aliasListSchema,
+  collectionGenreListSchema,
+  collectionGenreSchema,
+  collectionListSchema,
+  collectionSchema,
+  parseLxnsResponse,
+  songCollectionListSchema,
+  songListSchema,
+  songSchema,
+} from "./schemas";
 
 /** LXNS 素材 CDN 默认根地址 */
 export const LXNS_DEFAULT_ASSET_BASE_URL = "https://assets2.lxns.net/";
 
 /** 收藏品类型到列表响应字段的映射 */
-const COLLECTION_LIST_KEY: Record<CollectionType, string> = {
+const COLLECTION_LIST_KEY = {
   trophy: "trophies",
   icon: "icons",
   plate: "plates",
   frame: "frames",
-};
+} as const satisfies Record<CollectionType, string>;
 
 /** {@link LxnsMaimaiDatabase} 构造选项 */
 export interface LxnsMaimaiDatabaseOptions {
@@ -81,48 +92,65 @@ export class LxnsMaimaiDatabase implements MaimaiDatabase {
   }
 
   async getSongList(query?: SongListQuery): Promise<SongList> {
-    return this.cachedJson("song-list", [query?.version, query?.notes], async () =>
-      this.http.get<SongList>(
-        "song/list",
-        query === undefined ? undefined : { version: query.version, notes: query.notes },
-      ),
+    return this.cachedJson(
+      "song-list",
+      [query?.version, query?.notes],
+      async () =>
+        this.http.get(
+          "song/list",
+          query === undefined ? undefined : { version: query.version, notes: query.notes },
+        ),
+      (value) => parseLxnsResponse(songListSchema, value, "song/list"),
     );
   }
 
   async getSong(id: number, query?: { version?: number }): Promise<Song> {
-    return this.cachedJson("song", [id, query?.version], async () =>
-      this.http.get<Song>(`song/${id}`, query),
+    return this.cachedJson(
+      "song",
+      [id, query?.version],
+      async () => this.http.get(`song/${id}`, query),
+      (value) => parseLxnsResponse(songSchema, value, `song/${id}`),
     );
   }
 
   async getSongCollections(songId: number): Promise<SongCollection[]> {
-    return this.cachedJson("song-collections", [songId], async () =>
-      this.http.get<SongCollection[]>(`song-collections/${songId}`),
+    return this.cachedJson(
+      "song-collections",
+      [songId],
+      async () => this.http.get(`song-collections/${songId}`),
+      (value) => parseLxnsResponse(songCollectionListSchema, value, `song-collections/${songId}`),
     );
   }
 
   async getAliasList(): Promise<Alias[]> {
-    return this.cachedJson("alias-list", [], async () => {
-      const res = await this.http.get<{ aliases: Alias[] }>("alias/list");
-      return res.aliases;
-    });
+    return this.cachedJson(
+      "alias-list",
+      [],
+      async () => this.http.get("alias/list"),
+      (value) => parseLxnsResponse(aliasListSchema, value, "alias/list").aliases,
+    );
   }
 
   async getCollectionList(
     type: CollectionType,
     query?: { version?: number; required?: boolean },
   ): Promise<Collection[]> {
-    return this.cachedJson("collection-list", [type, query?.version, query?.required], async () => {
-      const key = COLLECTION_LIST_KEY[type];
-      const res = await this.http.get<Record<string, Collection[]>>(`${type}/list`, query);
-      const collections = res[key];
-      if (!Array.isArray(collections)) {
-        throw new LxnsDatabaseError({
-          message: `Lxns ${type}/list response is missing array field "${key}"`,
-        });
-      }
-      return collections;
-    });
+    return this.cachedJson(
+      "collection-list",
+      [type, query?.version, query?.required],
+      async () => this.http.get(`${type}/list`, query),
+      (value) => {
+        const key = COLLECTION_LIST_KEY[type];
+        const response = parseLxnsResponse(collectionListSchema, value, `${type}/list`);
+        const collections = response[key];
+        if (!collections) {
+          throw new LxnsDatabaseError({
+            message: `Lxns ${type}/list response is missing array field "${key}"`,
+          });
+        }
+        return collections;
+      },
+    );
   }
 
   async getCollectionInfo(
@@ -130,24 +158,31 @@ export class LxnsMaimaiDatabase implements MaimaiDatabase {
     id: number,
     query?: { version?: number },
   ): Promise<Collection> {
-    return this.cachedJson("collection", [type, id, query?.version], async () =>
-      this.http.get<Collection>(`${type}/${id}`, query),
+    return this.cachedJson(
+      "collection",
+      [type, id, query?.version],
+      async () => this.http.get(`${type}/${id}`, query),
+      (value) => parseLxnsResponse(collectionSchema, value, `${type}/${id}`),
     );
   }
 
   async getCollectionGenreList(query?: { version?: number }): Promise<CollectionGenre[]> {
-    return this.cachedJson("collection-genre-list", [query?.version], async () => {
-      const res = await this.http.get<{ collectionGenres: CollectionGenre[] }>(
-        "collection-genre/list",
-        query,
-      );
-      return res.collectionGenres;
-    });
+    return this.cachedJson(
+      "collection-genre-list",
+      [query?.version],
+      async () => this.http.get("collection-genre/list", query),
+      (value) =>
+        parseLxnsResponse(collectionGenreListSchema, value, "collection-genre/list")
+          .collectionGenres,
+    );
   }
 
   async getCollectionGenreInfo(id: number, query?: { version?: number }): Promise<CollectionGenre> {
-    return this.cachedJson("collection-genre", [id, query?.version], async () =>
-      this.http.get<CollectionGenre>(`collection-genre/${id}`, query),
+    return this.cachedJson(
+      "collection-genre",
+      [id, query?.version],
+      async () => this.http.get(`collection-genre/${id}`, query),
+      (value) => parseLxnsResponse(collectionGenreSchema, value, `collection-genre/${id}`),
     );
   }
 
@@ -189,10 +224,11 @@ export class LxnsMaimaiDatabase implements MaimaiDatabase {
   private async cachedJson<T>(
     operation: string,
     args: unknown[],
-    load: () => Promise<T>,
+    load: () => Promise<unknown>,
+    decode: (value: unknown) => T,
   ): Promise<T> {
-    if (!this.cache) return load();
-    const key = `lxns:data:${JSON.stringify([this.http.baseURL, operation, ...args])}`;
-    return this.cache.json(key, load);
+    if (!this.cache) return decode(await load());
+    const key = `lxns:raw:v1:${JSON.stringify([this.http.baseURL, operation, ...args])}`;
+    return this.cache.json(key, load, decode);
   }
 }

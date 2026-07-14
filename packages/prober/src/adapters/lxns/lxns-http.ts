@@ -1,30 +1,20 @@
 import { LxnsProberError } from "./error";
 import type { ScoreQuery } from "../../models";
 import { fetchWithResilience, RequestCoalescer, type HttpResilienceOptions } from "@mai-kit/shared";
+import * as z from "zod/mini";
 
 /** LXNS API 默认根地址 */
 export const LXNS_DEFAULT_BASE_URL = "https://maimai.lxns.net/api/v0/";
 
-/** LXNS dev/personal 响应信封 */
-interface LxnsEnvelope<T> {
-  success: boolean;
-  code: number;
-  message?: string;
-  data?: T;
-}
+const lxnsEnvelopeSchema = z.object({
+  success: z.boolean(),
+  code: z.number(),
+  message: z.optional(z.string()),
+  data: z.optional(z.unknown()),
+});
 
 /** 查询参数仅允许可安全 stringify 的原始值 */
 type QueryParams = Record<string, string | number | boolean | null | undefined>;
-
-function isLxnsEnvelope(body: unknown): body is LxnsEnvelope<unknown> {
-  if (typeof body !== "object" || body === null) {
-    return false;
-  }
-  if (!("success" in body)) {
-    return false;
-  }
-  return typeof body.success === "boolean";
-}
 
 export interface LxnsHttpOptions extends HttpResilienceOptions {
   baseURL: string;
@@ -47,7 +37,7 @@ export class LxnsHttp {
 
   constructor(private readonly options: LxnsHttpOptions) {}
 
-  async get<T>(path: string, params?: QueryParams): Promise<T> {
+  async get<T>(path: string, schema: z.ZodMiniType<T>, params?: QueryParams): Promise<T> {
     const url = new URL(`${this.options.pathPrefix}${path}`, this.options.baseURL);
     if (params) {
       for (const [key, value] of Object.entries(params)) {
@@ -58,10 +48,10 @@ export class LxnsHttp {
     }
 
     const key = `GET ${url.href}`;
-    return this.coalescer.run(key, async () => this.getOnce<T>(url));
+    return this.coalescer.run(key, async () => this.getOnce(url, schema));
   }
 
-  private async getOnce<T>(url: URL): Promise<T> {
+  private async getOnce<T>(url: URL, schema: z.ZodMiniType<T>): Promise<T> {
     let response: Response;
     try {
       response = await fetchWithResilience(
@@ -90,22 +80,31 @@ export class LxnsHttp {
       }
     }
 
-    if (isLxnsEnvelope(body)) {
-      if (body.success) {
-        if (body.data === undefined) {
+    const envelope = lxnsEnvelopeSchema.safeParse(body);
+    if (envelope.success) {
+      if (envelope.data.success) {
+        if (envelope.data.data === undefined) {
           throw new LxnsProberError({
-            code: body.code,
+            code: envelope.data.code,
             status: response.status,
             message: "Lxns API success response is missing data",
           });
         }
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        return body.data as T;
+        const parsed = schema.safeParse(envelope.data.data);
+        if (!parsed.success) {
+          throw new LxnsProberError({
+            code: envelope.data.code,
+            status: response.status,
+            message: `Lxns API ${url.pathname}: unexpected response structure (${formatIssues(parsed.error.issues)})`,
+            cause: parsed.error,
+          });
+        }
+        return parsed.data;
       }
       throw new LxnsProberError({
-        code: body.code,
+        code: envelope.data.code,
         status: response.status,
-        message: body.message ?? `Lxns API error (code: ${body.code})`,
+        message: envelope.data.message ?? `Lxns API error (code: ${envelope.data.code})`,
       });
     }
 
@@ -113,10 +112,22 @@ export class LxnsHttp {
       code: response.status,
       status: response.status,
       message: response.ok
-        ? `Lxns API returned an invalid response envelope (status: ${response.status})`
+        ? `Lxns API returned an invalid response envelope (status: ${response.status}; ${formatIssues(envelope.error.issues)})`
         : `Lxns API HTTP error (status: ${response.status})`,
+      cause: response.ok ? envelope.error : undefined,
     });
   }
+}
+
+function formatIssues(
+  issues: readonly { path: readonly PropertyKey[]; message: string }[],
+): string {
+  return issues
+    .slice(0, 3)
+    .map(
+      (issue) => `${issue.path.length > 0 ? issue.path.join(".") : "response"}: ${issue.message}`,
+    )
+    .join("; ");
 }
 
 /** 谱面定位 / 查询 → LXNS 查询参数 */

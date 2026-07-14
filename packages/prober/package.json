@@ -32,6 +32,7 @@
     "test:unit": "node --test tests/*.test.ts"
   },
   "dependencies": {
-    "@mai-kit/shared": "workspace:*"
+    "@mai-kit/shared": "workspace:*",
+    "zod": "^4.4.3"
   }
 }
