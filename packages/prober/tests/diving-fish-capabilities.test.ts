@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createDivingFishClient } from "@mai-kit/prober";
+import { createDivingFishClient, isDivingFishProberError } from "@mai-kit/prober";
 
 function assertConditionalApi(): void {
   const publicClient = createDivingFishClient();
@@ -162,6 +162,48 @@ void test("Diving-Fish exposes score queries only for complete-record clients", 
       { username: "DivingFish", ra: 16_000 },
       { username: "Lower", ra: 15_000 },
     ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+void test("Diving-Fish retries rejected player data and music metadata loads", async () => {
+  const originalFetch = globalThis.fetch;
+  let recordsAttempts = 0;
+  let musicDataAttempts = 0;
+  globalThis.fetch = async (input) => {
+    const url = new URL(input instanceof Request ? input.url : input);
+    if (url.pathname.endsWith("/dev/player/records")) {
+      recordsAttempts += 1;
+      if (url.searchParams.get("qq") === "1" && recordsAttempts === 1) {
+        throw new Error("temporary records failure");
+      }
+      return jsonResponse({ rating: 15_000, nickname: "Dev", records: [record] });
+    }
+    if (url.pathname.endsWith("/music_data")) {
+      musicDataAttempts += 1;
+      if (musicDataAttempts === 2) throw new Error("temporary music data failure");
+      return jsonResponse([{ id: 1, basic_info: { is_new: true } }]);
+    }
+    throw new Error(`Unexpected request: ${url.href}`);
+  };
+
+  try {
+    const firstPlayer = await createDivingFishClient({
+      developerToken: "dev-token",
+      baseURL: "https://example.test/api/",
+    }).getPlayer({ qq: 1 });
+    await assert.rejects(firstPlayer.getProfile(), (error) => isDivingFishProberError(error));
+    assert.equal((await firstPlayer.getProfile()).name, "Dev");
+    assert.equal(recordsAttempts, 2);
+
+    const secondPlayer = await createDivingFishClient({
+      developerToken: "dev-token",
+      baseURL: "https://example.test/api/",
+    }).getPlayer({ qq: 2 });
+    await assert.rejects(secondPlayer.getBests(), (error) => isDivingFishProberError(error));
+    assert.equal((await secondPlayer.getBests()).dx_total, 330);
+    assert.equal(musicDataAttempts, 3);
   } finally {
     globalThis.fetch = originalFetch;
   }

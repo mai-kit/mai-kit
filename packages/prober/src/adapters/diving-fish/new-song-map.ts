@@ -17,7 +17,14 @@ export async function getDivingFishIsNewMap(
   if (existing) return existing;
   const pending = load(http);
   cache.set(http, pending);
-  return pending;
+  try {
+    return await pending;
+  } catch (error) {
+    if (cache.get(http) === pending) {
+      cache.delete(http);
+    }
+    throw error;
+  }
 }
 
 /**

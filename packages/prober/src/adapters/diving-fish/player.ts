@@ -64,8 +64,15 @@ export class DivingFishPlayer<
 
   /** @returns 缓存后的完整玩家载荷 */
   protected async getData(): Promise<TData> {
-    this.dataPromise ??= this.load();
-    return this.dataPromise;
+    const request = (this.dataPromise ??= this.load());
+    try {
+      return await request;
+    } catch (error) {
+      if (this.dataPromise === request) {
+        this.dataPromise = undefined;
+      }
+      throw error;
+    }
   }
 }
 
