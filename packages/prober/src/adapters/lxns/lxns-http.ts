@@ -1,5 +1,6 @@
 import { LxnsProberError } from "./error";
 import type { ScoreQuery } from "../../models";
+import { assertScoreQuery } from "../../score-query";
 import { fetchWithResilience, RequestCoalescer, type HttpResilienceOptions } from "@mai-kit/shared";
 
 /** LXNS API 默认根地址 */
@@ -48,6 +49,18 @@ export class LxnsHttp {
   constructor(private readonly options: LxnsHttpOptions) {}
 
   async get<T>(path: string, params?: QueryParams): Promise<T> {
+    const url = this.buildUrl(path, params);
+    const key = `GET ${url.href}`;
+    return this.coalescer.run(key, async () => this.getOnce<T>(url));
+  }
+
+  async getBytes(path: string, params?: QueryParams): Promise<Uint8Array> {
+    const url = this.buildUrl(path, params);
+    const key = `GET bytes ${url.href}`;
+    return this.coalescer.run(key, async () => this.getBytesOnce(url));
+  }
+
+  private buildUrl(path: string, params?: QueryParams): URL {
     const url = new URL(`${this.options.pathPrefix}${path}`, this.options.baseURL);
     if (params) {
       for (const [key, value] of Object.entries(params)) {
@@ -56,12 +69,10 @@ export class LxnsHttp {
         }
       }
     }
-
-    const key = `GET ${url.href}`;
-    return this.coalescer.run(key, async () => this.getOnce<T>(url));
+    return url;
   }
 
-  private async getOnce<T>(url: URL): Promise<T> {
+  private async request(url: URL): Promise<Response> {
     let response: Response;
     try {
       response = await fetchWithResilience(
@@ -79,6 +90,12 @@ export class LxnsHttp {
         cause: error,
       });
     }
+
+    return response;
+  }
+
+  private async getOnce<T>(url: URL): Promise<T> {
+    const response = await this.request(url);
 
     const text = await response.text();
     let body: unknown;
@@ -117,13 +134,48 @@ export class LxnsHttp {
         : `Lxns API HTTP error (status: ${response.status})`,
     });
   }
+
+  private async getBytesOnce(url: URL): Promise<Uint8Array> {
+    const response = await this.request(url);
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!response.ok || contentType.includes("application/json")) {
+      const text = await response.text();
+      let body: unknown;
+      if (text) {
+        try {
+          body = JSON.parse(text);
+        } catch {
+          body = undefined;
+        }
+      }
+      if (isLxnsEnvelope(body) && !body.success) {
+        throw new LxnsProberError({
+          code: body.code,
+          status: response.status,
+          message: body.message ?? `Lxns API error (code: ${body.code})`,
+        });
+      }
+      throw new LxnsProberError({
+        code: response.status,
+        status: response.status,
+        message: response.ok
+          ? "Lxns API binary endpoint returned JSON instead of bytes"
+          : `Lxns API HTTP error (status: ${response.status})`,
+      });
+    }
+    return new Uint8Array(await response.arrayBuffer());
+  }
 }
 
 /** 谱面定位 / 查询 → LXNS 查询参数 */
 export function scoreSearchParams(query: ScoreQuery): Record<string, string | number> {
+  assertScoreQuery(query);
   const params: Record<string, string | number> = {};
   if (query.songId !== undefined) {
     params.song_id = query.songId;
+  }
+  if (query.songName !== undefined) {
+    params.song_name = query.songName;
   }
   if (query.songType !== undefined) {
     params.song_type = query.songType;

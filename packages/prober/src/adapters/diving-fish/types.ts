@@ -1,3 +1,5 @@
+import type { FCType, FSType, LevelIndex, SongType } from "@mai-kit/shared";
+
 /**
  * Diving-Fish 单曲成绩（`/query/player` charts 项、`/player/records` records 项）。
  * 字段名与上游 JSON 一致，映射层再转成通用 {@link Score}。
@@ -99,4 +101,36 @@ export interface DivingFishRatingRankEntry {
   username: string;
   /** Rating */
   ra: number;
+}
+
+/** 水鱼 `/query/plate` 返回的按版本成绩（字段少于完整 {@link Score}）。 */
+export interface DivingFishVersionScore {
+  /** 曲目 id */
+  id: number;
+  /** 曲名 */
+  song_name: string;
+  /** 等级文案 */
+  level: string;
+  /** 难度索引 */
+  level_index: LevelIndex;
+  /** 谱面类型 */
+  type: SongType;
+  /** 达成率 */
+  achievements: number;
+  /** FC 标记 */
+  fc: FCType | null;
+  /** FS 标记 */
+  fs: FSType | null;
+}
+
+/** @internal 水鱼 `/query/plate` 原始成绩。 */
+export interface DivingFishVersionRecord {
+  id: number;
+  title: string;
+  level: string;
+  level_index: number;
+  type: string;
+  achievements: number;
+  fc: string;
+  fs: string;
 }

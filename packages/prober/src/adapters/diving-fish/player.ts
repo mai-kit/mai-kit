@@ -1,15 +1,21 @@
-import type { ProberPlayer, ScoreListCapability } from "../../prober-player";
+import type { ProberPlayer, ScoreListCapability, ScoresProberPlayer } from "../../prober-player";
 import type { Bests, PlayerProfile, Score, ScoreQuery } from "../../models";
+import { filterScores } from "../../score-query";
 import type { DivingFishHttp } from "./http";
 import {
   mapDivingFishBestsFromCharts,
   mapDivingFishBestsFromRecords,
   mapDivingFishProfile,
   mapDivingFishRecord,
+  mapDivingFishVersionRecord,
 } from "./mappers";
 import { DivingFishProberError } from "./error";
 import { getDivingFishIsNewMap } from "./new-song-map";
-import type { DivingFishPlayerPayload, DivingFishPlayerQuery } from "./types";
+import type {
+  DivingFishPlayerPayload,
+  DivingFishPlayerQuery,
+  DivingFishVersionScore,
+} from "./types";
 
 interface DivingFishPlayerData {
   profile: PlayerProfile;
@@ -69,7 +75,7 @@ export class DivingFishScoresPlayer
   implements ScoreListCapability
 {
   /** @param load - 懒加载档案、Best50 与全量成绩 */
-  private constructor(load: () => Promise<DivingFishScoresPlayerData>) {
+  protected constructor(load: () => Promise<DivingFishScoresPlayerData>) {
     super(load);
   }
 
@@ -100,22 +106,6 @@ export class DivingFishScoresPlayer
   }
 
   /**
-   * Developer-Token 路径：按用户名 / QQ 拉完整成绩。
-   *
-   * @param http - 已配置 `developerToken` 的客户端
-   * @param query - 用户名或 QQ
-   * @returns 支持全量成绩查询的玩家对象
-   */
-  static fromDeveloperQuery(
-    http: DivingFishHttp,
-    query: DivingFishPlayerQuery,
-  ): DivingFishScoresPlayer {
-    return new DivingFishScoresPlayer(async () =>
-      buildRecordsData(http, await http.devRecords(query)),
-    );
-  }
-
-  /**
    * 读取全量成绩，并在本地应用可选谱面筛选。
    *
    * @param query - 曲目 id、谱面类型或难度筛选
@@ -123,13 +113,36 @@ export class DivingFishScoresPlayer
    */
   async getScores(query?: ScoreQuery): Promise<Score[]> {
     const data = await this.getData();
-    if (!query) return [...data.scores];
-    return data.scores.filter(
-      (score) =>
-        (query.songId === undefined || score.id === query.songId) &&
-        (query.songType === undefined || score.type === query.songType) &&
-        (query.levelIndex === undefined || String(score.level_index) === String(query.levelIndex)),
-    );
+    return filterScores(data.scores, query);
+  }
+}
+
+/** 水鱼 Developer-Token 绑定的玩家，额外提供上游专属的按曲目和按版本查询。 */
+export interface DivingFishDeveloperPlayer extends ScoresProberPlayer {
+  /** 只请求指定曲目（可一次传多个 id）的所有已上传谱面成绩。 */
+  getScoresBySongIds(songIds: number | readonly number[]): Promise<Score[]>;
+  /** 按水鱼版本名称查询牌子范围内的已游玩成绩。 */
+  getVersionScores(versions: readonly string[]): Promise<DivingFishVersionScore[]>;
+}
+
+/** Developer-Token 玩家实现。 */
+export class DivingFishDeveloperPlayerImpl
+  extends DivingFishScoresPlayer
+  implements DivingFishDeveloperPlayer
+{
+  constructor(
+    private readonly http: DivingFishHttp,
+    private readonly query: DivingFishPlayerQuery,
+  ) {
+    super(async () => buildRecordsData(http, await http.devRecords(query)));
+  }
+
+  async getScoresBySongIds(songIds: number | readonly number[]): Promise<Score[]> {
+    return (await this.http.devRecordsBySong(this.query, songIds)).map(mapDivingFishRecord);
+  }
+
+  async getVersionScores(versions: readonly string[]): Promise<DivingFishVersionScore[]> {
+    return (await this.http.versionRecords(this.query, versions)).map(mapDivingFishVersionRecord);
   }
 }
 

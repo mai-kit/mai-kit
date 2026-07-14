@@ -3,6 +3,8 @@ import type {
   DivingFishPlayerPayload,
   DivingFishPlayerQuery,
   DivingFishRatingRankEntry,
+  DivingFishRecord,
+  DivingFishVersionRecord,
 } from "./types";
 import { fetchWithResilience, RequestCoalescer, type HttpResilienceOptions } from "@mai-kit/shared";
 
@@ -108,6 +110,70 @@ export class DivingFishHttp {
   }
 
   /**
+   * Developer-Token 单曲 / 多曲成绩：`POST /dev/player/record`。
+   *
+   * @param query - 用户名或 QQ
+   * @param songIds - 一个或多个曲目 id
+   * @returns 指定曲目的所有已上传谱面成绩
+   */
+  async devRecordsBySong(
+    query: DivingFishPlayerQuery,
+    songIds: number | readonly number[],
+  ): Promise<DivingFishRecord[]> {
+    if (!this.developerToken) {
+      throw new DivingFishProberError({
+        message: "developerToken is required for /dev/player/record",
+      });
+    }
+    const ids = normalizeSongIds(songIds);
+    const body = await this.requestJson<unknown>("dev/player/record", {
+      method: "POST",
+      headers: { "Developer-Token": this.developerToken },
+      body: {
+        ...queryIdentity(query),
+        music_id: ids.length === 1 ? String(ids[0]) : ids.map(String),
+      },
+    });
+    if (!isRecord(body)) throw unexpectedPlayerPayload("dev/player/record");
+    const records: DivingFishRecord[] = [];
+    for (const value of Object.values(body)) {
+      if (!Array.isArray(value) || !value.every(isDivingFishRecord)) {
+        throw unexpectedPlayerPayload("dev/player/record");
+      }
+      records.push(...value);
+    }
+    return records;
+  }
+
+  /**
+   * Developer-Token 按游戏版本查询成绩：`POST /query/plate`。
+   *
+   * 当前官方路由要求 Developer-Token；旧版文档曾标为无需鉴权。
+   */
+  async versionRecords(
+    query: DivingFishPlayerQuery,
+    versions: readonly string[],
+  ): Promise<DivingFishVersionRecord[]> {
+    if (!this.developerToken) {
+      throw new DivingFishProberError({
+        message: "developerToken is required for /query/plate",
+      });
+    }
+    if (versions.length === 0 || versions.some((version) => version.trim().length === 0)) {
+      throw new DivingFishProberError({ message: "at least one non-empty version is required" });
+    }
+    const body = await this.requestJson<unknown>("query/plate", {
+      method: "POST",
+      headers: { "Developer-Token": this.developerToken },
+      body: { ...queryIdentity(query), version: [...versions] },
+    });
+    if (!isRecord(body) || !Array.isArray(body.verlist) || !body.verlist.every(isVersionRecord)) {
+      throw unexpectedPlayerPayload("query/plate");
+    }
+    return body.verlist;
+  }
+
+  /**
    * 曲目表：`GET /music_data`（用于 `is_new` 拆 B50）。
    *
    * @returns 上游 JSON（通常为曲目数组）
@@ -130,7 +196,7 @@ export class DivingFishHttp {
         message: "Diving-Fish rating_ranking: unexpected response structure",
       });
     }
-    return body;
+    return [...body].sort((a, b) => b.ra - a.ra || a.username.localeCompare(b.username));
   }
 
   /**
@@ -233,6 +299,14 @@ function queryIdentity(query: DivingFishPlayerQuery): Record<string, string | nu
   return { qq: query.qq };
 }
 
+function normalizeSongIds(songIds: number | readonly number[]): number[] {
+  const ids = typeof songIds === "number" ? [songIds] : [...songIds];
+  if (ids.length === 0 || ids.some((id) => !Number.isSafeInteger(id) || id < 0)) {
+    throw new DivingFishProberError({ message: "songIds must contain safe non-negative integers" });
+  }
+  return ids;
+}
+
 function isRatingRankEntry(value: unknown): value is DivingFishRatingRankEntry {
   return (
     typeof value === "object" &&
@@ -289,7 +363,7 @@ function parsePlayerPayload(
   return value as unknown as DivingFishPlayerPayload;
 }
 
-function isDivingFishRecord(value: unknown): boolean {
+function isDivingFishRecord(value: unknown): value is DivingFishRecord {
   return (
     isRecord(value) &&
     typeof value.achievements === "number" &&
@@ -310,6 +384,23 @@ function isDivingFishRecord(value: unknown): boolean {
     Number.isFinite(value.song_id) &&
     typeof value.title === "string" &&
     typeof value.type === "string"
+  );
+}
+
+function isVersionRecord(value: unknown): value is DivingFishVersionRecord {
+  return (
+    isRecord(value) &&
+    typeof value.id === "number" &&
+    Number.isSafeInteger(value.id) &&
+    typeof value.title === "string" &&
+    typeof value.level === "string" &&
+    typeof value.level_index === "number" &&
+    Number.isInteger(value.level_index) &&
+    typeof value.type === "string" &&
+    typeof value.achievements === "number" &&
+    Number.isFinite(value.achievements) &&
+    typeof value.fc === "string" &&
+    typeof value.fs === "string"
   );
 }
 

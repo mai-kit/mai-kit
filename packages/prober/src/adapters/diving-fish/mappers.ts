@@ -1,7 +1,12 @@
 import { LevelIndex } from "@mai-kit/shared";
 import type { FCType, FSType, RateType, SongType } from "@mai-kit/shared";
 import type { Bests, PlayerProfile, Score } from "../../models";
-import type { DivingFishPlayerPayload, DivingFishRecord } from "./types";
+import type {
+  DivingFishPlayerPayload,
+  DivingFishRecord,
+  DivingFishVersionRecord,
+  DivingFishVersionScore,
+} from "./types";
 import { DivingFishProberError } from "./error";
 
 const RATE_CODES = [
@@ -47,7 +52,13 @@ function isFsType(value: string): value is FSType {
  * @returns `dx` 或 `standard`
  * @throws {DivingFishProberError} 无法识别的类型
  */
-export function mapDivingFishSongType(type: string): SongType {
+export function mapDivingFishSongType(
+  type: string,
+  songId?: number,
+  levelLabel?: string,
+): SongType {
+  if (songId !== undefined && songId >= 100_000) return "utage";
+  if (levelLabel?.trim().toLowerCase() === "utage") return "utage";
   const t = type.trim().toUpperCase();
   if (t === "DX") return "dx";
   if (t === "SD" || t === "STANDARD") return "standard";
@@ -114,17 +125,12 @@ export function mapDivingFishRecord(record: DivingFishRecord): Score & { dx_rati
   assertFiniteNumber(record.dxScore, "record.dxScore");
   assertFiniteNumber(record.ra, "record.ra");
   const title = record.title.trim();
-  if (!title) throw invalidField("record.title", record.title);
 
-  const idx = record.level_index;
-  if (idx !== 0 && idx !== 1 && idx !== 2 && idx !== 3 && idx !== 4) {
-    throw invalidField("record.level_index", idx);
-  }
-  const levelIndex: LevelIndex = idx;
+  const levelIndex = mapLevelIndex(record.level_index, "record.level_index");
 
   return {
     id: record.song_id,
-    song_name: title,
+    ...(title ? { song_name: title } : {}),
     level: record.level,
     level_index: levelIndex,
     achievements: record.achievements,
@@ -133,7 +139,27 @@ export function mapDivingFishRecord(record: DivingFishRecord): Score & { dx_rati
     dx_score: record.dxScore,
     dx_rating: record.ra,
     rate: mapDivingFishRate(record.rate),
-    type: mapDivingFishSongType(record.type),
+    type: mapDivingFishSongType(record.type, record.song_id, record.level_label),
+  };
+}
+
+/** `/query/plate` 的精简版本成绩 → 适配公开模型。 */
+export function mapDivingFishVersionRecord(
+  record: DivingFishVersionRecord,
+): DivingFishVersionScore {
+  assertFiniteNumber(record.id, "version_record.id");
+  assertFiniteNumber(record.achievements, "version_record.achievements");
+  const title = record.title.trim();
+  if (!title) throw invalidField("version_record.title", record.title);
+  return {
+    id: record.id,
+    song_name: title,
+    level: record.level,
+    level_index: mapLevelIndex(record.level_index, "version_record.level_index"),
+    type: mapDivingFishSongType(record.type, record.id),
+    achievements: record.achievements,
+    fc: mapDivingFishFc(record.fc),
+    fs: mapDivingFishFs(record.fs),
   };
 }
 
@@ -205,9 +231,12 @@ export function mapDivingFishBestsFromRecords(
   records: readonly DivingFishRecord[],
   isNewSong: ReadonlyMap<number, boolean>,
 ): Bests {
-  const newScores: Array<Score & { dx_rating: number }> = [];
-  const oldScores: Array<Score & { dx_rating: number }> = [];
+  type RatedScore = { score: Score & { dx_rating: number }; ds: number };
+  const newScores: RatedScore[] = [];
+  const oldScores: RatedScore[] = [];
   for (const record of records) {
+    // 官方 B50 查询明确排除宴会场；完整 records 中仍会包含这些成绩。
+    if (record.song_id >= 100_000) continue;
     const score = mapDivingFishRecord(record);
     const isNew = isNewSong.get(score.id);
     if (isNew === undefined) {
@@ -215,15 +244,18 @@ export function mapDivingFishBestsFromRecords(
         message: `Diving-Fish music_data is missing song id=${score.id}`,
       });
     }
-    if (isNew) newScores.push(score);
-    else oldScores.push(score);
+    const item = { score, ds: record.ds };
+    if (isNew) newScores.push(item);
+    else oldScores.push(item);
   }
-  const byRaDesc = (a: Score & { dx_rating: number }, b: Score & { dx_rating: number }): number =>
-    b.dx_rating - a.dx_rating;
+  const byRaDesc = (a: RatedScore, b: RatedScore): number =>
+    b.score.dx_rating - a.score.dx_rating ||
+    b.ds - a.ds ||
+    b.score.achievements - a.score.achievements;
   newScores.sort(byRaDesc);
   oldScores.sort(byRaDesc);
-  const dx = newScores.slice(0, 15);
-  const standard = oldScores.slice(0, 35);
+  const dx = newScores.slice(0, 15).map(({ score }) => score);
+  const standard = oldScores.slice(0, 35).map(({ score }) => score);
   return {
     dx,
     standard,
@@ -232,6 +264,13 @@ export function mapDivingFishBestsFromRecords(
     dx_selections: [],
     standard_selections: [],
   };
+}
+
+function mapLevelIndex(value: number, field: string): LevelIndex {
+  if (value !== 0 && value !== 1 && value !== 2 && value !== 3 && value !== 4) {
+    throw invalidField(field, value);
+  }
+  return value;
 }
 
 function assertFiniteNumber(value: number, field: string): void {

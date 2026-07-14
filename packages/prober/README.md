@@ -20,8 +20,8 @@ const [profile, bests] = await Promise.all([player.getProfile(), player.getBests
 // 交给 @mai-kit/draw 的 Draw.poster(profile, bests)
 ```
 
-全量成绩、最近成绩、走势、热力图与单谱面历史拆成独立能力接口。客户端会按 token 和
-数据源在返回类型上暴露实际能力，不支持的方法不会挂在对象类型上。完整 records 路径可用：
+全量成绩、最近成绩、走势、热力图、单谱历史、排行与收藏品进度拆成独立能力接口。客户端会按
+token 和数据源在返回类型上暴露实际能力，不支持的方法不会挂在对象类型上。完整 records 路径可用：
 
 ```ts
 const scores = await player.getScores({ songId: 11451, levelIndex: 3 });
@@ -31,10 +31,10 @@ const scores = await player.getScores({ songId: 11451, levelIndex: 3 });
 
 `createLxnsClient` 按传入 token **条件暴露方法**（类型上未提供的 token 对应方法不存在）：
 
-| 用途       | 选项                  | 调用方式                           |
-| ---------- | --------------------- | ---------------------------------- |
-| 查自己     | `personalAccessToken` | `client.me()` → `FullProberPlayer` |
-| 按好友码查 | `devAccessToken`      | 如 `getPlayer` / `getBests(fc)` 等 |
+| 用途             | 选项                  | 调用方式                                    |
+| ---------------- | --------------------- | ------------------------------------------- |
+| 查自己           | `personalAccessToken` | `client.me()` → `LxnsPersonalPlayer`        |
+| 按好友码 / QQ 查 | `devAccessToken`      | `getPlayer(fc)` / `await getPlayerByQQ(qq)` |
 
 ```ts
 import { createLxnsClient } from "@mai-kit/prober";
@@ -43,11 +43,21 @@ import { createLxnsClient } from "@mai-kit/prober";
 const me = createLxnsClient({ personalAccessToken: "<user-token>" }).me();
 await me.getProfile();
 await me.getBests();
+await me.getScores({ songName: "PANDORA PARADOXXX" });
+await me.getScoreRanking({ songId: 834, songType: "standard", levelIndex: 4 });
+await me.getCollections("plate");
 
 // 开发者令牌 → 按好友码
 const client = createLxnsClient({ devAccessToken: "<dev-token>" });
-await client.getPlayer(1234567890);
-await client.getBests(1234567890);
+const player = client.getPlayer(1234567890);
+await player.getProfile();
+await player.getBests();
+await player.getRecents();
+await player.getSimpleScores();
+
+// QQ 需要先解析为好友码，因此返回 Promise
+const byQQ = await client.getPlayerByQQ(123456789);
+await byQQ.getBests({ songId: 834 });
 
 // 两种都有
 const both = createLxnsClient({
@@ -55,10 +65,15 @@ const both = createLxnsClient({
   devAccessToken: "<dev-token>",
 });
 both.me().getBests();
-both.getBests(friendCode);
+both.getPlayer(friendCode).getBests();
 ```
 
-鉴权与路径约定以 LXNS 文档为准；本适配将结果映射为包内通用模型。
+个人 API 提供完整成绩、Best50 / 单曲 Best、单谱排行、历史、趋势、热力图、收藏品、成绩导出和
+年度总结；它没有 Recent 50。开发者 API 提供 Recent 50、AP50 与精简全成绩，但 `/scores` 缺少
+达成率和 DX 分，因此明确命名为 `getSimpleScores()`，不伪装成 `ScoreListCapability`。
+
+鉴权与路径约定以 [LXNS 舞萌 DX API 文档](https://maimai.lxns.net/docs/api/maimai) 为准；
+写入、删除、OAuth 配置、别名和评论不属于本只读 prober。
 
 ## Diving-Fish 适配
 
@@ -78,6 +93,9 @@ await me.getScores();
 // Developer-Token：按用户名 / QQ 拉完整成绩
 const dev = createDivingFishClient({ developerToken: "<dev-token>" });
 const other = await dev.getPlayer({ qq: 123456 });
+await other.getScores();
+await other.getScoresBySongIds([834, 10_834]);
+await other.getVersionScores(["maimai でらっくす PRiSM"]);
 
 // 公开 Rating 排行（无需 token）
 const ranking = await client.getRatingRanking();
@@ -89,14 +107,24 @@ const ranking = await client.getRatingRanking();
 和 `getTestPlayer()` 返回 `ScoresProberPlayer`，可以查询并筛选完整 records。
 
 `getRatingRanking()` 是水鱼适配专属的站点排行能力，返回未开启隐私且 Rating 非零的
-用户；它不属于绑定某一玩家的 `ProberPlayer`。
+用户，并由适配按 Rating 降序排列；它不属于绑定某一玩家的 `ProberPlayer`。
 
-适配器保持只读：水鱼的账号资料修改、成绩导入 / 删除等写入接口不在本包范围内。
+Developer-Token 玩家还映射了官方 `/dev/player/record` 与 `/query/plate`：前者按一个或多个
+曲目 id 精确取成绩，后者按官方版本名称取牌子范围成绩。按版本成绩缺少 DX 分、定数和评级，
+因此使用 `DivingFishVersionScore`，不会用 `0` 补成完整 `Score`。
+
+水鱼接口以[官方路由实现](https://github.com/Diving-Fish/maimaidx-prober/blob/main/database/routes/maimai.py)
+为当前事实来源；字段说明可参考[官方仓库保留的 API 文档版本](https://github.com/Diving-Fish/maimaidx-prober/blob/7fa86a21d609c513c5ea54b6de56af3eb5a524a1/database/zh-api-document.md)。
+
+适配器保持只读：水鱼的登录会话 / 协议状态、账号资料修改、成绩导入 / 删除等账号接口，
+以及 `music_data`、`chart_stats` 等静态数据库接口不在本包范围内（后者属于
+`@mai-kit/database`）。
 
 通用 `PlayerProfile` 只要求昵称与 Rating。好友码、课段位、阶级、轮回星数以及装备
 收藏品 id 仅在数据源实际提供时存在；水鱼只返回牌子文案时会保留 `trophy.name`，不会
 伪造收藏品 id、好友码或阶级。`getPlayer({ qq })` 中的 QQ 仅用于定位水鱼账号，不会写入
-舞萌好友码。适配收到未知谱面类型、难度、评级或缺失 records/charts 时会抛
+舞萌好友码。上游曲名仅为空白时省略可选的 `song_name`，不会伪造曲名；适配收到未知谱面
+类型、难度、评级或缺失 records/charts 时会抛
 `DivingFishProberError`，不会映射成 `BASIC`、`standard` 或空成绩。
 
 水鱼 HTTP 字段到通用 `Score` / `Bests` 的映射函数为**适配内部实现**，不从包根导出；

@@ -123,8 +123,8 @@ utils  ← draw
 - 通用模型：`PlayerProfile` / `Score` / `Bests` / …
 - 通用接口：`ProberPlayer`（档案 + Best50）；其他查询按 `*Capability` 能力接口组合
 - LXNS：`createLxnsClient` — **条件类型**按 token 暴露方法
-  - `personalAccessToken` → `client.me(): FullProberPlayer`
-  - `devAccessToken` → 按好友码的 dev 查询挂在 client 上
+  - `personalAccessToken` → `client.me(): LxnsPersonalPlayer`（完整成绩 / 历史，无 Recent 50）
+  - `devAccessToken` → `client.getPlayer(friendCode): LxnsDevPlayer` / `getPlayerByQQ`（绑定玩家后查询；`/scores` 为精简成绩）
   - 至少一个 token；都没有则抛 `ProberError`
 - 仅只读查询；新查分器放 `src/adapters/<name>/`
 

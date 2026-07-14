@@ -24,12 +24,16 @@ mai-kit 按数据来源和处理阶段拆包。只安装实际需要的部分；
 
 目前内置两个适配：
 
-- [落雪查分器（LXNS）](https://maimai.lxns.net/)：个人令牌 / 开发者令牌
-- [Diving-Fish（水鱼）](https://www.diving-fish.com/maimaidx/prober/)：公开 B50 / Rating 排行、Import-Token、Developer-Token
+- [落雪查分器（LXNS）](https://maimai.lxns.net/)：个人令牌的完整成绩 / 历史 / 排行，以及开发者令牌的按玩家查询
+- [Diving-Fish（水鱼）](https://www.diving-fish.com/maimaidx/prober/)：公开 B50 / Rating 排行、Import-Token、Developer-Token（完整、按曲目、按版本）
 
 两种适配返回相同形态的 `profile` 和 `bests`，可以直接传给 `Draw.poster()`。
 通用档案只要求昵称与 Rating；好友码、段位、阶级和装备 id 仅在数据源实际提供时存在，
 适配器不会用 `0` 或占位名称伪装缺失数据。
+
+各 token 的额外能力按返回类型收窄：例如 LXNS 个人 API 没有 Recent 50，开发者 `/scores`
+只有精简字段；水鱼按版本成绩也不是完整 `Score`。这些差异保留在能力接口或适配专属类型中，
+不会为了统一方法名补默认字段。
 
 ### `@mai-kit/database`
 
