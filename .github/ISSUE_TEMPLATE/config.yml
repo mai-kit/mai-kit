@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使用指南
+    url: https://mai-kit.github.io/mai-kit/guide/getting-started
+    about: 提交问题前请先查看安装、运行环境和包组合方式。
+  - name: API 参考
+    url: https://mai-kit.github.io/mai-kit/api/
+    about: 查看公开 API、参数与返回类型。

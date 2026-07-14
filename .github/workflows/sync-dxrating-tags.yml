@@ -7,16 +7,25 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-dxrating-tags
+  cancel-in-progress: false
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: .node-version
+          package-manager-cache: false
 
       - name: Enable pnpm
         run: corepack enable pnpm
@@ -26,14 +35,24 @@ jobs:
       - run: pnpm --filter @mai-kit/database test
       - run: pnpm check
 
-      - name: Commit updated snapshot
+      - name: Create update pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [[ -z "$(git status --porcelain -- packages/database/data/dxrating-tags.json)" ]]; then
             echo "DXRating chart tags are already up to date."
             exit 0
           fi
+
+          branch="automation/sync-dxrating-tags-${GITHUB_RUN_ID}"
+          git switch -c "$branch"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add packages/database/data/dxrating-tags.json
           git commit -m "chore(database): 同步 DXRating 谱面标签"
-          git push
+          git push --set-upstream origin "$branch"
+          gh pr create \
+            --base main \
+            --head "$branch" \
+            --title "chore(database): 同步 DXRating 谱面标签" \
+            --body $'## 改动说明\n\n同步 DXRating 上游谱面标签快照。\n\n## 主要改动\n\n- 更新 `packages/database/data/dxrating-tags.json`。\n- 由常规 CI 验证构建、测试、文档与 Web smoke。\n\n## 验证\n\n- `pnpm --filter @mai-kit/database test`\n- `pnpm check`'
