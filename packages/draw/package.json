@@ -48,7 +48,7 @@
   "devDependencies": {
     "@mai-kit/analysis": "workspace:*",
     "@mai-kit/database": "workspace:*",
-    "@types/node": "^24.5.1",
+    "@types/node": "^26.1.1",
     "@types/react": "^19.1.0"
   }
 }
