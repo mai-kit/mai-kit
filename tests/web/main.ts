@@ -5,6 +5,7 @@ import {
 } from "../../packages/assets/dist/index.js";
 import { LevelIndex, LxnsMaimaiDatabase } from "../../packages/database/dist/index.js";
 import { Draw } from "../../packages/draw/dist/index.js";
+import { inferJudgementDistribution } from "../../packages/judgement-inference/dist/index.js";
 import {
   evaluateJudgementPlan,
   JUDGEMENT_TARGETS,
@@ -12,6 +13,7 @@ import {
   solveJudgementLimits,
 } from "../../packages/judgement-solver/dist/index.js";
 import { createDivingFishClient, createLxnsClient } from "../../packages/prober/dist/index.js";
+import { calculateAchievement, calculateChartDxScore } from "../../packages/utils/dist/index.js";
 
 declare global {
   interface Window {
@@ -30,6 +32,8 @@ interface SmokeResult {
   solverRemaining?: number;
   solverTargetCount?: number;
   solverMixedSatisfied?: boolean;
+  inferenceAchievement?: number;
+  inferenceDxScore?: number;
   proberRating?: number;
   proberScoreCount?: number;
   proberUtageType?: string;
@@ -88,6 +92,20 @@ try {
   }
   if (!solverMixed.satisfied) throw new Error("browser mixed judgement evaluation failed");
 
+  const inferred = await withTimeout(
+    inferJudgementDistribution(solverNotes, {
+      achievement: 90,
+      dxScore: 20,
+      judgementCounts: { great: 5 },
+    }),
+    "browser judgement inference",
+  );
+  const inferenceAchievement = calculateAchievement(solverNotes, inferred);
+  const inferenceDxScore = calculateChartDxScore(inferred).dxScore;
+  if (inferenceAchievement !== 90 || inferenceDxScore !== 20) {
+    throw new Error("browser judgement inference was incorrect");
+  }
+
   const draw = new Draw({
     database: {
       async getAsset() {
@@ -126,6 +144,8 @@ try {
     solverRemaining: solverLimit.remainingCount,
     solverTargetCount: solverLimits.length,
     solverMixedSatisfied: solverMixed.satisfied,
+    inferenceAchievement,
+    inferenceDxScore,
     proberRating: prober.rating,
     proberScoreCount: prober.scoreCount,
     proberUtageType: prober.utageType,

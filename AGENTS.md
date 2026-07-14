@@ -40,6 +40,7 @@ packages/
 ├── shared/     # 共享：MaiKitError + maimai 领域原语（SongType / RateType / …）
 ├── utils/      # Rating、达成率、判定、DX 分、谱面索引等纯函数；无 I/O
 ├── judgement-solver/ # 混合判定检查、剩余容错与独立容错表；纯 TypeScript、无 I/O
+├── judgement-inference/ # 成绩反推完整判定；GLPK/WASM；GPL-3.0-only 叶子包
 ├── database/   # 游戏静态数据 + 素材（适配器；LXNS 公共 API，无鉴权）
 ├── prober/     # 查分器适配层（条件 client；personal / dev token）
 ├── analysis/   # Best50 重算、升分候选、成绩快照对比；纯分析
@@ -51,6 +52,7 @@ packages/
 
 ```
 shared ← utils ← judgement-solver
+shared ← utils ← judgement-inference
 shared ← database
 shared ← prober ← analysis
 utils  ← analysis
@@ -68,6 +70,7 @@ utils  ← draw
 | `draw` → `utils`      | `Draw` 出图时用 utils 算 `dx_max` / 定数 map；**填 dx_max 是 draw 职责**，不要丢给调用方                                                 |
 | `analysis`            | 依赖 prober 模型与 utils 公式；只做确定性内存分析，不请求 database / prober API                                                          |
 | `judgement-solver`    | 依赖 shared 的 FC 类型与 utils 判定公式；纯 TypeScript 求解，不维护第二套计分，不引入 I/O                                                |
+| `judgement-inference` | 依赖 shared / utils 与 `glpk.js`；只返回一组可行判定；**GPL-3.0-only 叶子包，其他 `packages/*` 禁止依赖**                                |
 | `utils`               | 仅纯函数；不依赖 database/prober/analysis/judgement-solver/draw                                                                          |
 | 领域原语              | 放 `@mai-kit/shared`（`SongType` / `LevelIndex` / `FCType` / `FSType` / `RateType` / `Collection*`），database / prober 再导出，避免漂移 |
 
@@ -89,7 +92,7 @@ utils  ← draw
 - 无 I/O、无适配器；包根导出常用稳定公式，高级公共入口为 `@mai-kit/utils/judgement` / `song`
 - 未列入 package `exports` 的源码模块属于内部实现；不提供 `internal` 公共入口
 - 海报场景下 **注入 chart.dx_max 仍由 draw 完成**（内部调 utils），用户不必拼 map
-- 随机成绩、判定预算或重依赖反推不进入 utils；组合检查与剩余容错由 `@mai-kit/judgement-solver` 提供
+- 随机成绩、判定预算或重依赖反推不进入 utils；组合检查与剩余容错由 `@mai-kit/judgement-solver` 提供，成绩反推由 `@mai-kit/judgement-inference` 提供
 
 ### `@mai-kit/judgement-solver`
 
@@ -100,6 +103,15 @@ utils  ← draw
 - 复用 `@mai-kit/utils` 的 `calculateAchievement` / `calculateChartDxScore`，不维护平行公式
 - 纯 TypeScript、无 I/O / Node API / 原生 addon / WASM；Node 与 Web 行为一致
 - 未分配 Note 明确补为 CP；已有判定不可被求解器删除或改写
+
+### `@mai-kit/judgement-inference`
+
+- `inferJudgementDistribution`：给定物量、目标达成率、可选 DX 分与汇总判定数量，返回一组可行完整判定
+- 同一成绩可能有多组解；只保证回算满足目标，不声称还原玩家真实原始判定
+- Node 动态加载 `glpk.js/node`；Web 动态加载 `glpk.js` 内置 Worker；两端公开 API 一致
+- 默认只求精确解；最近解仅在调用方显式启用时计算，不静默降级
+- **GPL-3.0-only 许可证隔离**：本包必须保持叶子，其他 `packages/*` 的 dependencies / devDependencies / peerDependencies / optionalDependencies 均不得引用
+- 最终应用、Bot、CLI 可按需直接安装；若未来通用库需要反推能力，须改用兼容许可证后端或明确接受 GPL
 
 ### `@mai-kit/database`
 
@@ -163,24 +175,24 @@ createLxnsClient({ personalAccessToken })
 
 根目录 scripts（工具装在 workspace 根，子包不重复装 oxlint/tsdown/typescript）：
 
-| 命令                             | 作用                                                                     |
-| -------------------------------- | ------------------------------------------------------------------------ |
-| `pnpm install`                   | 安装依赖                                                                 |
-| `pnpm build`                     | 按 workspace 依赖拓扑构建所有库包                                        |
-| `pnpm typecheck`                 | **先 build 再**各包 `tsc --noEmit`                                       |
-| `pnpm test`                      | 各包 `test`（无 test 脚本的包会被 pnpm 跳过/报错视配置而定）             |
-| `pnpm test:web`                  | 先 build，再用 headless Chrome 验证 solver/assets/database/draw Web 路径 |
-| `pnpm test:web:built`            | **CI 内部**：复用已构建 `dist` 跑 Web smoke，不重复 build                |
-| `pnpm docs:dev` / `docs:build`   | VitePress + TypeDoc 自动 API 文档（`docs:build` 会先 build）             |
-| `pnpm docs:build:built`          | **CI 内部**：复用已构建 `dist` 生成文档并跑 generated-api 测试           |
-| `pnpm changeset`                 | 记录待发版变更（写 `.changeset/*.md`）                                   |
-| `pnpm ci:version` / `ci:publish` | 发版脚本（由 Release CI 调用；本地也可）                                 |
-| `pnpm dev`                       | 各包 `tsdown --watch`                                                    |
-| `pnpm clean`                     | 清理各包构建产物                                                         |
-| `pnpm lint` / `lint:fix`         | 先 build，再运行 type-aware oxlint                                       |
-| `pnpm format` / `format:check`   | oxfmt                                                                    |
-| `pnpm check`                     | format:check + build + lint                                              |
-| `pnpm fix`                       | format + lint:fix                                                        |
+| 命令                             | 作用                                                                               |
+| -------------------------------- | ---------------------------------------------------------------------------------- |
+| `pnpm install`                   | 安装依赖                                                                           |
+| `pnpm build`                     | 按 workspace 依赖拓扑构建所有库包                                                  |
+| `pnpm typecheck`                 | **先 build 再**各包 `tsc --noEmit`                                                 |
+| `pnpm test`                      | 各包 `test`（无 test 脚本的包会被 pnpm 跳过/报错视配置而定）                       |
+| `pnpm test:web`                  | 先 build，再用 headless Chrome 验证 solver/inference/assets/database/draw Web 路径 |
+| `pnpm test:web:built`            | **CI 内部**：复用已构建 `dist` 跑 Web smoke，不重复 build                          |
+| `pnpm docs:dev` / `docs:build`   | VitePress + TypeDoc 自动 API 文档（`docs:build` 会先 build）                       |
+| `pnpm docs:build:built`          | **CI 内部**：复用已构建 `dist` 生成文档并跑 generated-api 测试                     |
+| `pnpm changeset`                 | 记录待发版变更（写 `.changeset/*.md`）                                             |
+| `pnpm ci:version` / `ci:publish` | 发版脚本（由 Release CI 调用；本地也可）                                           |
+| `pnpm dev`                       | 各包 `tsdown --watch`                                                              |
+| `pnpm clean`                     | 清理各包构建产物                                                                   |
+| `pnpm lint` / `lint:fix`         | 先 build，再运行 type-aware oxlint                                                 |
+| `pnpm format` / `format:check`   | oxfmt                                                                              |
+| `pnpm check`                     | format:check + build + lint                                                        |
+| `pnpm fix`                       | format + lint:fix                                                                  |
 
 单包：
 

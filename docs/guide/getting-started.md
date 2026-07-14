@@ -21,6 +21,12 @@ pnpm add @mai-kit/utils
 pnpm add @mai-kit/judgement-solver
 ```
 
+需要根据达成率、DX 分和判定总数反推一组完整判定时，安装 GPL-3.0-only 的可选包：
+
+```bash
+pnpm add @mai-kit/judgement-inference
+```
+
 需要重算 Best50、排列升分候选或比较成绩快照时，安装：
 
 ```bash
