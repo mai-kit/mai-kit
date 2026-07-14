@@ -40,14 +40,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           # 发布/Version PR 必须基于 CI 实际验证过的提交，不能隐式 checkout 更新后的 main。
           ref: ${{ github.event.workflow_run.head_sha }}
           # changesets 需要完整历史以生成 changelog
           fetch-depth: 0
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: .node-version
           registry-url: https://registry.npmjs.org
@@ -65,7 +65,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Create Release PR or publish
-        uses: changesets/action@v1
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1
         with:
           # workflow_run checkout 为精确 SHA；显式指定 Version PR 的目标分支。
           branch: main
