@@ -12,6 +12,7 @@ body:
         - "@mai-kit/shared"
         - "@mai-kit/utils"
         - "@mai-kit/judgement-solver"
+        - "@mai-kit/judgement-inference"
         - "@mai-kit/database"
         - "@mai-kit/prober"
         - "@mai-kit/analysis"
