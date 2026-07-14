@@ -10,6 +10,11 @@ updates:
       time: "04:00"
       timezone: Asia/Shanghai
     open-pull-requests-limit: 5
+    # 大版本升级需要同步评估运行时与工具链，留给计划性迁移；安全更新不受此规则影响。
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
     groups:
       javascript-non-major:
         patterns:
