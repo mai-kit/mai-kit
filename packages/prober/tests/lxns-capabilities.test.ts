@@ -86,10 +86,18 @@ void test("LXNS personal player exposes actual read-only personal endpoints", as
         latest_version: 25500,
         player_name: "Player",
         player_avatar_id: 42,
+        total_plays: 1_234,
       });
     }
     if (url.pathname.endsWith("/player")) {
-      return lxnsResponse({ name: "Player", rating: 15_000, friend_code: 1234567890 });
+      return lxnsResponse({
+        name: "Player",
+        rating: 15_000,
+        friend_code: 1234567890,
+        course_rank: 10,
+        class_rank: 5,
+        star: 2,
+      });
     }
     throw new Error(`Unexpected request: ${url.href}`);
   };
@@ -133,7 +141,9 @@ void test("LXNS personal player exposes actual read-only personal endpoints", as
     assert.equal((await player.getCollections("icon"))[0]?.id, 42);
     assert.equal((await player.getCollectionProgress("icon", 42)).id, 42);
     assert.match(new TextDecoder().decode(await player.exportScores()), /Song/u);
-    assert.equal((await player.getYearInReview(2025, { agree: true })).year, 2025);
+    const yearInReview = await player.getYearInReview(2025, { agree: true });
+    assert.equal(yearInReview.year, 2025);
+    assert.equal(yearInReview.total_plays, 1_234);
     assert.equal(requests.at(-1)?.searchParams.get("agree"), "true");
   } finally {
     globalThis.fetch = originalFetch;
@@ -150,16 +160,37 @@ void test("LXNS developer client binds players and preserves endpoint capabiliti
     assert.equal(request.headers.get("Authorization"), "dev-token");
 
     if (url.pathname.endsWith("/player/qq/123")) {
-      return lxnsResponse({ name: "QQ", rating: 15_000, friend_code: 9876543210 });
+      return lxnsResponse({
+        name: "QQ",
+        rating: 15_000,
+        friend_code: 9876543210,
+        course_rank: 10,
+        class_rank: 5,
+        star: 2,
+      });
     }
     if (url.pathname.endsWith("/player/qq/456")) {
-      return lxnsResponse({ name: "Invalid QQ", rating: 15_000 });
+      return lxnsResponse({
+        name: "Invalid QQ",
+        rating: 15_000,
+        friend_code: 1.5,
+        course_rank: 10,
+        class_rank: 5,
+        star: 2,
+      });
     }
     if (url.pathname.endsWith("/player/9876543210")) {
       throw new Error("getPlayerByQQ should reuse the resolved profile");
     }
     if (url.pathname.endsWith("/player/1234567890")) {
-      return lxnsResponse({ name: "FC", rating: 15_000, friend_code: 1234567890 });
+      return lxnsResponse({
+        name: "FC",
+        rating: 15_000,
+        friend_code: 1234567890,
+        course_rank: 10,
+        class_rank: 5,
+        star: 2,
+      });
     }
     if (url.pathname.endsWith("/player/1234567890/best")) return lxnsResponse(score);
     if (url.pathname.endsWith("/player/1234567890/bests/ap")) return lxnsResponse(bests);
@@ -223,8 +254,7 @@ void test("LXNS developer client binds players and preserves endpoint capabiliti
     await assert.rejects(
       client.getPlayerByQQ(456),
       (error) =>
-        isLxnsProberError(error) &&
-        error.message === "Lxns player binding requires a valid friend_code",
+        isLxnsProberError(error) && error.message.includes("unexpected response structure"),
     );
   } finally {
     globalThis.fetch = originalFetch;
@@ -242,7 +272,14 @@ void test("LXNS developer player validates bindings and retries a failed profile
     }
     attempts += 1;
     if (attempts === 1) throw new Error("temporary network failure");
-    return lxnsResponse({ name: "FC", rating: 15_000, friend_code: 1234567890 });
+    return lxnsResponse({
+      name: "FC",
+      rating: 15_000,
+      friend_code: 1234567890,
+      course_rank: 10,
+      class_rank: 5,
+      star: 2,
+    });
   };
 
   try {

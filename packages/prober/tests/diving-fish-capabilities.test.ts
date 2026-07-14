@@ -94,6 +94,16 @@ void test("Diving-Fish exposes score queries only for complete-record clients", 
             fc: "ap",
             fs: "fs",
           },
+          {
+            id: 2,
+            title: "　",
+            level: "13",
+            level_index: 2,
+            type: "SD",
+            achievements: 99.5,
+            fc: "",
+            fs: "",
+          },
         ],
       });
     }
@@ -141,6 +151,16 @@ void test("Diving-Fish exposes score queries only for complete-record clients", 
         achievements: 100.5,
         fc: "ap",
         fs: "fs",
+      },
+      {
+        id: 2,
+        song_name: "　",
+        level: "13",
+        level_index: 2,
+        type: "standard",
+        achievements: 99.5,
+        fc: null,
+        fs: null,
       },
     ]);
 
@@ -204,6 +224,50 @@ void test("Diving-Fish retries rejected player data and music metadata loads", a
     await assert.rejects(secondPlayer.getBests(), (error) => isDivingFishProberError(error));
     assert.equal((await secondPlayer.getBests()).dx_total, 330);
     assert.equal(musicDataAttempts, 3);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+void test("Diving-Fish validates developer-only endpoint payloads", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = new URL(input instanceof Request ? input.url : input);
+    if (url.pathname.endsWith("/dev/player/record")) {
+      return jsonResponse({ 1: [{ ...record, achievements: "100.5" }] });
+    }
+    if (url.pathname.endsWith("/query/plate")) {
+      return jsonResponse({
+        verlist: [
+          {
+            id: "1",
+            title: "Song",
+            level: "14+",
+            level_index: 3,
+            type: "DX",
+            achievements: 100.5,
+            fc: "ap",
+            fs: "fs",
+          },
+        ],
+      });
+    }
+    throw new Error(`Unexpected request: ${url.href}`);
+  };
+
+  try {
+    const player = await createDivingFishClient({
+      developerToken: "dev-token",
+      baseURL: "https://example.test/api/",
+    }).getPlayer({ qq: 123456 });
+    await assert.rejects(
+      player.getScoresBySongIds(1),
+      (error) => isDivingFishProberError(error) && error.message.includes("achievements"),
+    );
+    await assert.rejects(
+      player.getVersionScores(["maimai でらっくす PRiSM"]),
+      (error) => isDivingFishProberError(error) && error.message.includes("verlist.0.id"),
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

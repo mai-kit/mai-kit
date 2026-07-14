@@ -30,6 +30,7 @@ interface SmokeResult {
   solverRemaining?: number;
   solverTargetCount?: number;
   solverMixedSatisfied?: boolean;
+  proberRating?: number;
   proberScoreCount?: number;
   proberUtageType?: string;
 }
@@ -53,6 +54,7 @@ async function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
 }
 
 try {
+  const prober = await withTimeout(loadMockProberData(), "prober schema validation");
   const badge = getRateBadge("sssp");
   const [{ notoSansSc, comfortaa }, wasm] = await withTimeout(
     Promise.all([getDefaultFontBuffers(), getResvgWasmBytes()]),
@@ -64,78 +66,6 @@ try {
     "chart tag loading",
   );
   if (!tags || tags.length === 0) throw new Error("bundled chart tags did not load");
-
-  const originalFetch = globalThis.fetch;
-  let proberScoreCount = 0;
-  let proberUtageType = "";
-  try {
-    globalThis.fetch = async (input, init) => {
-      const request = input instanceof Request ? input : new Request(input, init);
-      const url = new URL(request.url);
-      if (url.pathname.endsWith("/user/maimai/player/scores")) {
-        return new Response(
-          JSON.stringify({
-            success: true,
-            code: 200,
-            data: [
-              {
-                id: 1,
-                song_name: "Web Score",
-                level: "14",
-                level_index: 3,
-                achievements: 100.5,
-                dx_score: 2_800,
-                rate: "sssp",
-                type: "dx",
-              },
-            ],
-          }),
-          { headers: { "Content-Type": "application/json" } },
-        );
-      }
-      if (url.pathname.endsWith("/dev/player/record")) {
-        return new Response(
-          JSON.stringify({
-            100508: [
-              {
-                achievements: 196,
-                ds: 13,
-                dxScore: 3_000,
-                fc: "",
-                fs: "sync",
-                level: "13?",
-                level_index: 0,
-                level_label: "Utage",
-                ra: 0,
-                rate: "sssp",
-                song_id: 100508,
-                title: "[宴] Web Score",
-                type: "DX",
-              },
-            ],
-          }),
-          { headers: { "Content-Type": "application/json" } },
-        );
-      }
-      throw new Error(`unexpected prober smoke request: ${url}`);
-    };
-
-    const lxnsPlayer = createLxnsClient({
-      personalAccessToken: "web-token",
-      baseURL: "https://example.test/api/v0/",
-    }).me();
-    proberScoreCount = (await lxnsPlayer.getScores({ songName: "Web Score" })).length;
-
-    const divingFishPlayer = await createDivingFishClient({
-      developerToken: "web-token",
-      baseURL: "https://example.test/api/",
-    }).getPlayer({ qq: 123456 });
-    proberUtageType = (await divingFishPlayer.getScoresBySongIds(100508))[0]?.type ?? "";
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-  if (proberScoreCount !== 1) throw new Error("browser LXNS score filtering failed");
-  if (proberUtageType !== "utage") throw new Error("browser Diving-Fish utage mapping failed");
 
   const solverNotes = { tap: 10, hold: 0, slide: 0, touch: 0, break: 0 };
   const solverLimit = solveJudgementLimit(
@@ -196,8 +126,9 @@ try {
     solverRemaining: solverLimit.remainingCount,
     solverTargetCount: solverLimits.length,
     solverMixedSatisfied: solverMixed.satisfied,
-    proberScoreCount,
-    proberUtageType,
+    proberRating: prober.rating,
+    proberScoreCount: prober.scoreCount,
+    proberUtageType: prober.utageType,
   };
   document.querySelector("#status")?.replaceChildren("ok");
   document.querySelector("#result")?.replaceChildren(JSON.stringify(window.maiKitSmoke));
@@ -206,4 +137,91 @@ try {
   window.maiKitSmoke = { status: "error", message };
   document.querySelector("#status")?.replaceChildren(message);
   document.querySelector("#result")?.replaceChildren(JSON.stringify(window.maiKitSmoke));
+}
+
+async function loadMockProberData(): Promise<{
+  rating: number;
+  scoreCount: number;
+  utageType: string;
+}> {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    const url = new URL(request.url);
+    if (url.pathname.endsWith("/user/maimai/player")) {
+      return lxnsResponse({
+        name: "Web Smoke",
+        rating: 15_000,
+        friend_code: 123456789,
+        course_rank: 10,
+        class_rank: 5,
+        star: 2,
+      });
+    }
+    if (url.pathname.endsWith("/user/maimai/player/scores")) {
+      return lxnsResponse([
+        {
+          id: 1,
+          song_name: "Web Score",
+          level: "14",
+          level_index: 3,
+          achievements: 100.5,
+          dx_score: 2_800,
+          rate: "sssp",
+          type: "dx",
+        },
+      ]);
+    }
+    if (url.pathname.endsWith("/dev/player/record")) {
+      return new Response(
+        JSON.stringify({
+          100508: [
+            {
+              achievements: 196,
+              ds: 13,
+              dxScore: 3_000,
+              fc: "",
+              fs: "sync",
+              level: "13?",
+              level_index: 0,
+              level_label: "Utage",
+              ra: 0,
+              rate: "sssp",
+              song_id: 100508,
+              title: "[宴] Web Score",
+              type: "DX",
+            },
+          ],
+        }),
+        { headers: { "Content-Type": "application/json" } },
+      );
+    }
+    throw new Error(`unexpected prober smoke request: ${url.href}`);
+  };
+
+  try {
+    const lxnsPlayer = createLxnsClient({
+      personalAccessToken: "web-token",
+      baseURL: "https://example.test/api/v0/",
+    }).me();
+    const profile = await lxnsPlayer.getProfile();
+    const scoreCount = (await lxnsPlayer.getScores({ songName: "Web Score" })).length;
+    const divingFishPlayer = await createDivingFishClient({
+      developerToken: "web-token",
+      baseURL: "https://example.test/api/",
+    }).getPlayer({ qq: 123456 });
+    const utageType = (await divingFishPlayer.getScoresBySongIds(100508))[0]?.type ?? "";
+    if (scoreCount !== 1) throw new Error("browser LXNS score filtering failed");
+    if (utageType !== "utage") throw new Error("browser Diving-Fish utage mapping failed");
+    return { rating: profile.rating, scoreCount, utageType };
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+function lxnsResponse(data: unknown): Response {
+  return new Response(JSON.stringify({ success: true, code: 200, data }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
 }

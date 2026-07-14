@@ -57,7 +57,7 @@ void test("Diving-Fish public B50 maps profile and scores without fabricated fie
   });
 });
 
-void test("Diving-Fish keeps valid records with an upstream blank title", async () => {
+void test("Diving-Fish preserves an upstream whitespace-only title", async () => {
   const payload = {
     rating: 16_000,
     nickname: "test",
@@ -68,7 +68,7 @@ void test("Diving-Fish keeps valid records with an upstream blank title", async 
     const player = await createDivingFishClient({
       baseURL: "https://example.test/api/",
     }).getPlayer({ username: "test" });
-    assert.equal((await player.getBests()).dx[0]?.song_name, undefined);
+    assert.equal((await player.getBests()).dx[0]?.song_name, "　");
   });
 });
 

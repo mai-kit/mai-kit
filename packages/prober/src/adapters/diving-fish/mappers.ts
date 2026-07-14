@@ -1,13 +1,14 @@
 import { LevelIndex } from "@mai-kit/shared";
 import type { FCType, FSType, RateType, SongType } from "@mai-kit/shared";
 import type { Bests, PlayerProfile, Score } from "../../models";
+import { DivingFishProberError } from "./error";
 import type {
   DivingFishPlayerPayload,
+  DivingFishQueryPlayerPayload,
   DivingFishRecord,
   DivingFishVersionRecord,
-  DivingFishVersionScore,
-} from "./types";
-import { DivingFishProberError } from "./error";
+} from "./schemas";
+import type { DivingFishVersionScore } from "./types";
 
 const RATE_CODES = [
   "sssp",
@@ -45,13 +46,7 @@ function isFsType(value: string): value is FSType {
   return FS_SET.has(value);
 }
 
-/**
- * 谱面类型原文 → 通用 `SongType`。
- *
- * @param type - 上游 `DX` / `SD` 等
- * @returns `dx` 或 `standard`
- * @throws {DivingFishProberError} 无法识别的类型
- */
+/** 上游谱面类型 → 通用 `SongType`。 */
 export function mapDivingFishSongType(
   type: string,
   songId?: number,
@@ -59,32 +54,20 @@ export function mapDivingFishSongType(
 ): SongType {
   if (songId !== undefined && songId >= 100_000) return "utage";
   if (levelLabel?.trim().toLowerCase() === "utage") return "utage";
-  const t = type.trim().toUpperCase();
-  if (t === "DX") return "dx";
-  if (t === "SD" || t === "STANDARD") return "standard";
+  const normalized = type.trim().toUpperCase();
+  if (normalized === "DX") return "dx";
+  if (normalized === "SD" || normalized === "STANDARD") return "standard";
   throw invalidField("record.type", type);
 }
 
-/**
- * 评级原文 → `RateType`。
- *
- * @param rate - 如 `sssp`、`aa`
- * @returns 合法评级
- * @throws {DivingFishProberError} 无法识别的评级
- */
+/** 上游评级码 → 通用 `RateType`。 */
 export function mapDivingFishRate(rate: string): RateType {
   const key = rate.trim().toLowerCase();
   if (isRateType(key)) return key;
   throw invalidField("record.rate", rate);
 }
 
-/**
- * FC 原文 → `FCType` 或 `null`。
- *
- * @param fc - `fc`/`fcp`/`ap`/`app` 或空串
- * @returns 合法 FC；空值为 `null`
- * @throws {DivingFishProberError} 非空但无法识别的 FC
- */
+/** 上游 FC 码 → 通用 `FCType`；空串为 `null`。 */
 export function mapDivingFishFc(fc: string): FCType | null {
   const key = fc.trim().toLowerCase();
   if (!key) return null;
@@ -92,13 +75,7 @@ export function mapDivingFishFc(fc: string): FCType | null {
   throw invalidField("record.fc", fc);
 }
 
-/**
- * FS 原文 → `FSType` 或 `null`。
- *
- * @param fs - `sync`/`fs`/`fsp`/`fsd`/`fsdp` 或空串
- * @returns 合法 FS；空值为 `null`
- * @throws {DivingFishProberError} 非空但无法识别的 FS
- */
+/** 上游 FS 码 → 通用 `FSType`；空串为 `null`。 */
 export function mapDivingFishFs(fs: string): FSType | null {
   const key = fs.trim().toLowerCase();
   if (!key) return null;
@@ -106,33 +83,19 @@ export function mapDivingFishFs(fs: string): FSType | null {
   throw invalidField("record.fs", fs);
 }
 
-/**
- * 单曲成绩 → 通用 {@link Score}（可供 draw 使用）。
- *
- * @param record - 上游 records / charts 项
- * @returns 通用成绩
- * @throws {DivingFishProberError} 必填成绩字段非法或枚举值无法识别
- *
- * @example
- * ```ts
- * const score = mapDivingFishRecord(record);
- * console.log(score.id, score.level_index, score.achievements);
- * ```
- */
+/** 单条上游成绩 → 通用成绩。 */
 export function mapDivingFishRecord(record: DivingFishRecord): Score & { dx_rating: number } {
   assertFiniteNumber(record.song_id, "record.song_id");
   assertFiniteNumber(record.achievements, "record.achievements");
   assertFiniteNumber(record.dxScore, "record.dxScore");
   assertFiniteNumber(record.ra, "record.ra");
-  const title = record.title.trim();
-
-  const levelIndex = mapLevelIndex(record.level_index, "record.level_index");
+  const title = record.title;
 
   return {
     id: record.song_id,
-    ...(title ? { song_name: title } : {}),
+    ...(title.length > 0 ? { song_name: title } : {}),
     level: record.level,
-    level_index: levelIndex,
+    level_index: mapLevelIndex(record.level_index, "record.level_index"),
     achievements: record.achievements,
     fc: mapDivingFishFc(record.fc),
     fs: mapDivingFishFs(record.fs),
@@ -143,14 +106,14 @@ export function mapDivingFishRecord(record: DivingFishRecord): Score & { dx_rati
   };
 }
 
-/** `/query/plate` 的精简版本成绩 → 适配公开模型。 */
+/** `/query/plate` 的精简成绩 → 适配公开模型。 */
 export function mapDivingFishVersionRecord(
   record: DivingFishVersionRecord,
 ): DivingFishVersionScore {
   assertFiniteNumber(record.id, "version_record.id");
   assertFiniteNumber(record.achievements, "version_record.achievements");
-  const title = record.title.trim();
-  if (!title) throw invalidField("version_record.title", record.title);
+  const title = record.title;
+  if (title.length === 0) throw invalidField("version_record.title", record.title);
   return {
     id: record.id,
     song_name: title,
@@ -163,13 +126,7 @@ export function mapDivingFishVersionRecord(
   };
 }
 
-/**
- * 玩家顶栏字段 → 通用 {@link PlayerProfile}。
- *
- * @param payload - 上游玩家载荷
- * @returns 仅包含水鱼实际提供字段的通用档案
- * @throws {DivingFishProberError} 缺少昵称或 Rating 非法
- */
+/** 玩家顶栏字段 → 通用档案。 */
 export function mapDivingFishProfile(payload: DivingFishPlayerPayload): PlayerProfile {
   assertFiniteNumber(payload.rating, "player.rating");
   const name = payload.nickname?.trim() || payload.username?.trim();
@@ -186,27 +143,8 @@ export function mapDivingFishProfile(payload: DivingFishPlayerPayload): PlayerPr
   };
 }
 
-/**
- * @param scores - 成绩列表
- * @returns `dx_rating` 合计
- */
-function sumRating(scores: readonly (Score & { dx_rating: number })[]): number {
-  return scores.reduce((sum, score) => sum + score.dx_rating, 0);
-}
-
-/**
- * 从公开 `query/player` 的 `charts.dx` / `charts.sd` 组装 {@link Bests}。
- *
- * @param payload - 含 `charts` 的查询结果
- * @returns Best50（新 15 + 旧 35）
- * @throws {DivingFishProberError} B50 分组缺失或任一成绩字段非法
- */
-export function mapDivingFishBestsFromCharts(payload: DivingFishPlayerPayload): Bests {
-  if (!payload.charts || !Array.isArray(payload.charts.dx) || !Array.isArray(payload.charts.sd)) {
-    throw new DivingFishProberError({
-      message: "Diving-Fish query/player response is missing charts.dx or charts.sd",
-    });
-  }
+/** 公开 B50 的 `charts.dx` / `charts.sd` → 通用 Best50。 */
+export function mapDivingFishBestsFromCharts(payload: DivingFishQueryPlayerPayload): Bests {
   const dx = payload.charts.dx.map(mapDivingFishRecord);
   const standard = payload.charts.sd.map(mapDivingFishRecord);
   return {
@@ -219,14 +157,7 @@ export function mapDivingFishBestsFromCharts(payload: DivingFishPlayerPayload): 
   };
 }
 
-/**
- * 从完整 `records` 按是否新曲拆 B15 / B35，并按单曲 Rating 降序截取。
- *
- * @param records - 完整成绩列表
- * @param isNewSong - `song_id` → 是否当前版本新曲（通常来自 `/music_data`）
- * @returns Best50
- * @throws {DivingFishProberError} 曲目新旧分类缺失或任一成绩字段非法
- */
+/** 完整 records 按 `is_new` 重算 B15 / B35。 */
 export function mapDivingFishBestsFromRecords(
   records: readonly DivingFishRecord[],
   isNewSong: ReadonlyMap<number, boolean>,
@@ -235,7 +166,6 @@ export function mapDivingFishBestsFromRecords(
   const newScores: RatedScore[] = [];
   const oldScores: RatedScore[] = [];
   for (const record of records) {
-    // 官方 B50 查询明确排除宴会场；完整 records 中仍会包含这些成绩。
     if (record.song_id >= 100_000) continue;
     const score = mapDivingFishRecord(record);
     const isNew = isNewSong.get(score.id);
@@ -264,6 +194,10 @@ export function mapDivingFishBestsFromRecords(
     dx_selections: [],
     standard_selections: [],
   };
+}
+
+function sumRating(scores: readonly (Score & { dx_rating: number })[]): number {
+  return scores.reduce((sum, score) => sum + score.dx_rating, 0);
 }
 
 function mapLevelIndex(value: number, field: string): LevelIndex {

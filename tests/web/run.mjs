@@ -88,6 +88,7 @@ try {
   assert.equal(result.solverRemaining, 3);
   assert.equal(result.solverTargetCount, 23);
   assert.equal(result.solverMixedSatisfied, true);
+  assert.equal(result.proberRating, 15_000);
   assert.equal(result.proberScoreCount, 1);
   assert.equal(result.proberUtageType, "utage");
   console.log(result);

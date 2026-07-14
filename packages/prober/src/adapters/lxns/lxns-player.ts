@@ -24,8 +24,20 @@ import type {
 } from "../../models";
 import { assertScoreQuery, filterScores } from "../../score-query";
 import { LxnsHttp, scoreSearchParams } from "./lxns-http";
+import {
+  bestsSchema,
+  collectionListSchema,
+  collectionSchema,
+  heatmapSchema,
+  playerProfileSchema,
+  ratingTrendListSchema,
+  scoreHistorySchema,
+  scoreListSchema,
+  scoreRankingListSchema,
+  yearInReviewSchema,
+} from "./schemas";
 
-/** 个人成绩列表仅下推稳定的结构化筛选；曲名仍由本地精确匹配。 */
+/** 个人成绩列表仅下推结构化筛选；曲名仍由本地精确匹配。 */
 function scoreListSearchParams(query: ScoreQuery): Record<string, string | number> {
   assertScoreQuery(query);
   const params: Record<string, string | number> = {};
@@ -51,11 +63,7 @@ export interface LxnsYearInReview {
   [key: string]: unknown;
 }
 
-/**
- * LXNS 个人令牌绑定的玩家。
- *
- * 个人 API 提供完整成绩、趋势、热力图、单谱历史与排行，但没有开发者 API 的 Recent 50。
- */
+/** LXNS 个人令牌绑定的玩家。 */
 export interface LxnsPersonalPlayer
   extends
     ProberPlayer,
@@ -81,40 +89,40 @@ export class LxnsPersonalPlayerImpl implements LxnsPersonalPlayer {
   constructor(private readonly http: LxnsHttp) {}
 
   async getProfile(): Promise<PlayerProfile> {
-    return this.http.get<PlayerProfile>("player");
+    return this.http.get("player", playerProfileSchema);
   }
 
   async getBests(): Promise<Bests>;
   async getBests(query: SongScoreQuery): Promise<Score[]>;
   async getBests(query?: SongScoreQuery): Promise<Bests | Score[]> {
-    return this.http.get<Bests | Score[]>(
-      "player/bests",
-      query ? scoreSearchParams(query) : undefined,
-    );
+    return query
+      ? this.http.get("player/bests", scoreListSchema, scoreSearchParams(query))
+      : this.http.get("player/bests", bestsSchema);
   }
 
   async getScores(query?: ScoreQuery): Promise<Score[]> {
-    const scores = await this.http.get<Score[]>(
+    const scores = await this.http.get(
       "player/scores",
+      scoreListSchema,
       query ? scoreListSearchParams(query) : undefined,
     );
     return filterScores(scores, query);
   }
 
   async getTrend(version?: number): Promise<RatingTrend[]> {
-    return this.http.get<RatingTrend[]>("player/trend", { version });
+    return this.http.get("player/trend", ratingTrendListSchema, { version });
   }
 
   async getHeatmap(): Promise<Heatmap> {
-    return this.http.get<Heatmap>("player/heatmap");
+    return this.http.get("player/heatmap", heatmapSchema);
   }
 
   async getScoreHistory(key: ScoreKey): Promise<ScoreHistory> {
-    return this.http.get<ScoreHistory>("player/score/history", scoreSearchParams(key));
+    return this.http.get("player/score/history", scoreHistorySchema, scoreSearchParams(key));
   }
 
   async getScoreRanking(key: ScoreKey): Promise<ScoreRankingEntry[]> {
-    return this.http.get<ScoreRankingEntry[]>("player/score/ranking", scoreSearchParams(key));
+    return this.http.get("player/score/ranking", scoreRankingListSchema, scoreSearchParams(key));
   }
 
   async getCollections(type: CollectionType): Promise<Collection[]> {
@@ -124,11 +132,11 @@ export class LxnsPersonalPlayerImpl implements LxnsPersonalPlayer {
       plate: "plates",
       frame: "frames",
     };
-    return this.http.get<Collection[]>(`player/${paths[type]}`);
+    return this.http.get(`player/${paths[type]}`, collectionListSchema);
   }
 
   async getCollectionProgress(type: CollectionType, id: number): Promise<Collection> {
-    return this.http.get<Collection>(`player/${type}/${id}`);
+    return this.http.get(`player/${type}/${id}`, collectionSchema);
   }
 
   async exportScores(format = "csv"): Promise<Uint8Array> {
@@ -136,6 +144,6 @@ export class LxnsPersonalPlayerImpl implements LxnsPersonalPlayer {
   }
 
   async getYearInReview(year: number, options?: { agree?: boolean }): Promise<LxnsYearInReview> {
-    return this.http.get<LxnsYearInReview>(`player/year-in-review/${year}`, options);
+    return this.http.get(`player/year-in-review/${year}`, yearInReviewSchema, options);
   }
 }

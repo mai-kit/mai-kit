@@ -22,13 +22,19 @@ import type {
 } from "../../models";
 import { LxnsProberError } from "./error";
 import { LxnsHttp, scoreSearchParams } from "./lxns-http";
+import {
+  bestsSchema,
+  collectionSchema,
+  heatmapSchema,
+  playerProfileSchema,
+  ratingTrendListSchema,
+  scoreHistorySchema,
+  scoreListSchema,
+  scoreSchema,
+  simpleScoreListSchema,
+} from "./schemas";
 
-/**
- * LXNS 开发者令牌绑定的玩家。
- *
- * 开发者 API 的 `/scores` 仅返回 {@link SimpleScore}，因此本类型不会伪装成
- * `ScoreListCapability`；需要完整成绩时应使用个人令牌的 `me().getScores()`。
- */
+/** LXNS 开发者令牌绑定的玩家。 */
 export interface LxnsDevPlayer
   extends
     ProberPlayer,
@@ -65,7 +71,7 @@ export class LxnsDevApi implements LxnsDevClient {
   }
 
   async getPlayerByQQ(qq: number): Promise<LxnsDevPlayer> {
-    const profile = await this.http.get<PlayerProfile>(`player/qq/${qq}`);
+    const profile = await this.http.get(`player/qq/${qq}`, playerProfileSchema);
     return new LxnsDevPlayerImpl(this.http, profile);
   }
 }
@@ -90,8 +96,9 @@ class LxnsDevPlayerImpl implements LxnsDevPlayer {
   }
 
   async getProfile(): Promise<PlayerProfile> {
-    const request = (this.profilePromise ??= this.http.get<PlayerProfile>(
+    const request = (this.profilePromise ??= this.http.get(
       `player/${this.friendCode}`,
+      playerProfileSchema,
     ));
     try {
       return await request;
@@ -104,46 +111,47 @@ class LxnsDevPlayerImpl implements LxnsDevPlayer {
   }
 
   async getBest(key: ScoreKey): Promise<Score> {
-    return this.http.get<Score>(`player/${this.friendCode}/best`, scoreSearchParams(key));
+    return this.http.get(`player/${this.friendCode}/best`, scoreSchema, scoreSearchParams(key));
   }
 
   async getBests(): Promise<Bests>;
   async getBests(query: SongScoreQuery): Promise<Score[]>;
   async getBests(query?: SongScoreQuery): Promise<Bests | Score[]> {
-    return this.http.get<Bests | Score[]>(
-      `player/${this.friendCode}/bests`,
-      query ? scoreSearchParams(query) : undefined,
-    );
+    const path = `player/${this.friendCode}/bests`;
+    return query
+      ? this.http.get(path, scoreListSchema, scoreSearchParams(query))
+      : this.http.get(path, bestsSchema);
   }
 
   async getApBests(): Promise<Bests> {
-    return this.http.get<Bests>(`player/${this.friendCode}/bests/ap`);
+    return this.http.get(`player/${this.friendCode}/bests/ap`, bestsSchema);
   }
 
   async getRecents(): Promise<Score[]> {
-    return this.http.get<Score[]>(`player/${this.friendCode}/recents`);
+    return this.http.get(`player/${this.friendCode}/recents`, scoreListSchema);
   }
 
   async getSimpleScores(): Promise<SimpleScore[]> {
-    return this.http.get<SimpleScore[]>(`player/${this.friendCode}/scores`);
+    return this.http.get(`player/${this.friendCode}/scores`, simpleScoreListSchema);
   }
 
   async getHeatmap(): Promise<Heatmap> {
-    return this.http.get<Heatmap>(`player/${this.friendCode}/heatmap`);
+    return this.http.get(`player/${this.friendCode}/heatmap`, heatmapSchema);
   }
 
   async getTrend(version?: number): Promise<RatingTrend[]> {
-    return this.http.get<RatingTrend[]>(`player/${this.friendCode}/trend`, { version });
+    return this.http.get(`player/${this.friendCode}/trend`, ratingTrendListSchema, { version });
   }
 
   async getScoreHistory(key: ScoreKey): Promise<ScoreHistory> {
-    return this.http.get<ScoreHistory>(
+    return this.http.get(
       `player/${this.friendCode}/score/history`,
+      scoreHistorySchema,
       scoreSearchParams(key),
     );
   }
 
   async getCollectionProgress(type: CollectionType, id: number): Promise<Collection> {
-    return this.http.get<Collection>(`player/${this.friendCode}/${type}/${id}`);
+    return this.http.get(`player/${this.friendCode}/${type}/${id}`, collectionSchema);
   }
 }
