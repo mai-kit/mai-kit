@@ -38,7 +38,7 @@
     "disableSources": false,
     "disableGit": true,
     "gitRevision": "main",
-    "sourceLinkTemplate": "https://github.com/wsyzxjn/mai-kit/blob/{gitRevision}/{path}#L{line}",
+    "sourceLinkTemplate": "https://github.com/mai-kit/mai-kit/blob/{gitRevision}/{path}#L{line}",
     "cascadedModifierTags": []
   },
   "plugin": ["typedoc-plugin-markdown", "typedoc-vitepress-theme", "./typedoc-plugin-api.js"],
@@ -47,7 +47,7 @@
   "disableSources": false,
   "disableGit": true,
   "gitRevision": "main",
-  "sourceLinkTemplate": "https://github.com/wsyzxjn/mai-kit/blob/{gitRevision}/{path}#L{line}",
+  "sourceLinkTemplate": "https://github.com/mai-kit/mai-kit/blob/{gitRevision}/{path}#L{line}",
   "cascadedModifierTags": [],
   "excludePrivate": true,
   "excludeProtected": true,

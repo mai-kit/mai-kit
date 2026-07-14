@@ -462,11 +462,11 @@ export interface ProberPlayer { ... }
 - `.github/workflows/deploy-docs.yml` 同样只在成功 main CI 后运行，直接下载该次 `docs-site` artifact 并部署；特权 workflow 中不 checkout 或执行仓库源码。
 - 发版 job 固定安装明确 npm 版本（当前 `npm@11.16.0`），不要使用会漂移的 `npm@latest`。
 - 各库包已设 `publishConfig.access: public`、`publishConfig.provenance: true`，以及 `repository`（须与真实 GitHub 仓一致）。
-- 每个 `@mai-kit/*` 只能配置一个 Trusted Publisher：仓库 `wsyzxjn/mai-kit`、`Workflow filename = release.yml`（仅文件名）、允许 `npm publish`。
+- 每个 `@mai-kit/*` 只能配置一个 Trusted Publisher：仓库 `mai-kit/mai-kit`、`Workflow filename = release.yml`（仅文件名）、允许 `npm publish`。
 - 新包必须先手动发布首个版本，使包名在 npm registry 存在，再配置 OIDC：
 
   ```bash
-  npm trust github @mai-kit/<package> --file release.yml --repo wsyzxjn/mai-kit --allow-publish --yes
+  npm trust github @mai-kit/<package> --file release.yml --repo mai-kit/mai-kit --allow-publish --yes
   npm trust list @mai-kit/<package> --json
   ```
 

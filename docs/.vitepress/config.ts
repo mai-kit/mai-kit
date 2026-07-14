@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const sidebarPath = join(root, "../api/typedoc-sidebar.json");
-const repository = process.env.GITHUB_REPOSITORY ?? "wsyzxjn/mai-kit";
+const repository = process.env.GITHUB_REPOSITORY ?? "mai-kit/mai-kit";
 const [repositoryOwner, repositoryName] = repository.split("/");
 const isProjectPage =
   process.env.GITHUB_ACTIONS === "true" &&
