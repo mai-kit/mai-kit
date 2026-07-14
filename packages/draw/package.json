@@ -43,12 +43,12 @@
     "@resvg/resvg-js": "^2.6.2",
     "@resvg/resvg-wasm": "^2.6.2",
     "react": "^19.1.0",
-    "satori": "^0.26.0"
+    "satori": "^0.28.0"
   },
   "devDependencies": {
     "@mai-kit/analysis": "workspace:*",
     "@mai-kit/database": "workspace:*",
-    "@types/node": "^24.5.1",
+    "@types/node": "^24.13.3",
     "@types/react": "^19.1.0"
   }
 }
