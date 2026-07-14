@@ -14,8 +14,8 @@ export interface DivingFishDifficultyStats {
 export interface DivingFishChartStat {
   /** 参与统计的成绩数量 */
   cnt: number;
-  /** 难度索引 */
-  diff: number;
+  /** 上游等级文案（如 `"12+"`）；难度索引由所在数组下标表示 */
+  diff: string;
   /** 水鱼根据社区成绩拟合的相对难度 */
   fit_diff: number;
   /** 平均达成率 */
@@ -39,7 +39,7 @@ export interface DivingFishChartStat {
 export interface DivingFishChartStats {
   /** 曲目 id → 各难度谱面统计 */
   charts: Record<string, Array<DivingFishChartStat | null>>;
-  /** 难度索引 → 全站汇总统计 */
+  /** 等级文案 → 全站汇总统计 */
   diff_data: Record<string, DivingFishDifficultyStats>;
 }
 

@@ -13,16 +13,46 @@ const profile = {
 };
 
 void test("LXNS validates response data and removes unknown fields", async () => {
-  await withMockedFetch({ ...profile, upstream_only: true }, async () => {
-    const player = createLxnsClient({
-      personalAccessToken: "token",
-      baseURL: "https://example.test/api/v0/",
-    }).me();
-    const result = await player.getProfile();
+  await withMockedFetch(
+    {
+      ...profile,
+      trophy: {
+        name: "溶けてしまいそう",
+        required: [{ fc: "fs" }, { fc: "ap" }, { fs: "fsd" }],
+      },
+      upstream_only: true,
+    },
+    async () => {
+      const player = createLxnsClient({
+        personalAccessToken: "token",
+        baseURL: "https://example.test/api/v0/",
+      }).me();
+      const result = await player.getProfile();
 
-    assert.equal(result.name, "LXNS");
-    assert.equal("upstream_only" in result, false);
-  });
+      assert.equal(result.name, "LXNS");
+      assert.equal(result.trophy?.required?.[0]?.fc, undefined);
+      assert.equal(result.trophy?.required?.[0]?.fs, "fs");
+      assert.equal(result.trophy?.required?.[1]?.fc, "ap");
+      assert.equal(result.trophy?.required?.[2]?.fs, "fsd");
+      assert.equal("upstream_only" in result, false);
+    },
+  );
+});
+
+void test("LXNS dev collection responses normalize FS codes from the upstream fc field", async () => {
+  await withMockedFetch(
+    { id: 5524, name: "溶けてしまいそう", required: [{ fc: "fsp" }] },
+    async () => {
+      const client = createLxnsClient({
+        devAccessToken: "token",
+        baseURL: "https://example.test/api/v0/",
+      });
+      const result = await client.getPlayerCollection(123456789, "trophy", 5524);
+
+      assert.equal(result.required?.[0]?.fc, undefined);
+      assert.equal(result.required?.[0]?.fs, "fsp");
+    },
+  );
 });
 
 void test("LXNS wraps schema failures in adapter errors", async () => {

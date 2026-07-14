@@ -59,6 +59,30 @@ void test("Diving-Fish public song list maps SD/DX notes without fabricated meta
   });
 });
 
+void test("Diving-Fish public song list preserves a non-empty whitespace title", async () => {
+  const title = "　";
+  await withMockedFetch(
+    [
+      {
+        id: "11422",
+        title,
+        type: "DX",
+        ds: [3],
+        level: ["3"],
+        charts: [{ notes: [100, 8, 8, 16, 1] }],
+        basic_info: { title, artist: "x0o0x_", genre: "流行&动漫", bpm: 130 },
+      },
+    ],
+    async () => {
+      const database = new DivingFishMaimaiDatabase({
+        baseURL: "https://example.test/api/",
+      });
+      const list = await database.getSongList({ notes: true });
+      assert.equal(list.songs[0]?.title, title);
+    },
+  );
+});
+
 void test("Diving-Fish public song list rejects malformed fields", async () => {
   const base = {
     id: "8",
@@ -73,6 +97,7 @@ void test("Diving-Fish public song list rejects malformed fields", async () => {
     { ...base, id: "" },
     { ...base, type: "utage" },
     { ...base, level: [] },
+    { ...base, title: "" },
     { ...base, title: null },
     { ...base, level: [1] },
     { ...base, charts: [{ notes: [1, 2] }] },
@@ -119,7 +144,7 @@ void test("DivingFishMaimaiDatabase validates chart stats and maps empty charts 
         {},
         {
           cnt: 100,
-          diff: 1,
+          diff: "7",
           fit_diff: 7.4,
           avg: 98.5,
           avg_dx: 900,
@@ -143,6 +168,7 @@ void test("DivingFishMaimaiDatabase validates chart stats and maps empty charts 
     const database = new DivingFishMaimaiDatabase({ baseURL: "https://example.test/api/" });
     const result = await database.getChartStats();
     assert.equal(result.charts["11451"]?.[0], null);
+    assert.equal(result.charts["11451"]?.[1]?.diff, "7");
     assert.equal(result.charts["11451"]?.[1]?.fit_diff, 7.4);
     assert.equal(result.diff_data["1"]?.achievements, 97.2);
 

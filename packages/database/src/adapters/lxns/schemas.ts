@@ -3,6 +3,8 @@ import type {
   Alias,
   Collection,
   CollectionGenre,
+  CollectionRequired,
+  FSType,
   Genre,
   Notes,
   Song,
@@ -128,7 +130,7 @@ const collectionRequiredSongSchema = z.object({
 const collectionRequiredSchema = z.object({
   difficulties: z.optional(z.array(levelIndexSchema)),
   rate: z.optional(rateTypeSchema),
-  fc: z.optional(fcTypeSchema),
+  fc: z.optional(z.union([fcTypeSchema, fsTypeSchema])),
   fs: z.optional(fsTypeSchema),
   songs: z.optional(z.array(collectionRequiredSongSchema)),
   completed: z.optional(z.boolean()),
@@ -141,7 +143,51 @@ export const collectionSchema = z.object({
   description: z.optional(z.string()),
   genre: z.optional(z.string()),
   required: z.optional(z.array(collectionRequiredSchema)),
-}) satisfies z.ZodMiniType<Collection>;
+});
+
+type LxnsCollection = z.infer<typeof collectionSchema>;
+type LxnsCollectionRequired = z.infer<typeof collectionRequiredSchema>;
+
+export function normalizeLxnsCollection(collection: LxnsCollection): Collection {
+  const { required, ...rest } = collection;
+  return {
+    ...rest,
+    ...(required
+      ? {
+          required: required.map((item, index) =>
+            normalizeLxnsCollectionRequired(item, collection.id, index),
+          ),
+        }
+      : {}),
+  };
+}
+
+function normalizeLxnsCollectionRequired(
+  required: LxnsCollectionRequired,
+  collectionId: number,
+  index: number,
+): CollectionRequired {
+  const { fc, fs, ...rest } = required;
+  if (fc !== undefined && isFsType(fc)) {
+    if (fs !== undefined && fs !== fc) {
+      throw new LxnsDatabaseError({
+        message: `Lxns collection ${collectionId} required[${index}] has conflicting fc/fs values`,
+      });
+    }
+    return { ...rest, fs: fc };
+  }
+  return {
+    ...rest,
+    ...(fc !== undefined ? { fc } : {}),
+    ...(fs !== undefined ? { fs } : {}),
+  };
+}
+
+function isFsType(value: string): value is FSType {
+  return (
+    value === "fsdp" || value === "fsd" || value === "fsp" || value === "fs" || value === "sync"
+  );
+}
 
 export const collectionListSchema = z.object({
   trophies: z.optional(z.array(collectionSchema)),

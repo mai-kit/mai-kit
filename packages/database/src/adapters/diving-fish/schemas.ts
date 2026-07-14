@@ -31,7 +31,7 @@ export type DivingFishMusicEntry = z.infer<typeof divingFishMusicEntrySchema>;
 
 const chartStatSchema = z.object({
   cnt: z.number(),
-  diff: z.number(),
+  diff: z.string(),
   fit_diff: z.number(),
   avg: z.number(),
   avg_dx: z.number(),

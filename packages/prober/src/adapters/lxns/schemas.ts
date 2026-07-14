@@ -2,6 +2,8 @@ import * as z from "zod/mini";
 import type {
   Bests,
   Collection,
+  CollectionRequired,
+  FSType,
   Heatmap,
   PlayerCollection,
   PlayerProfile,
@@ -40,14 +42,37 @@ const collectionRequiredSongSchema = z.object({
   completed_difficulties: z.optional(z.array(levelIndexSchema)),
 });
 
-const collectionRequiredSchema = z.object({
+const lxnsCollectionRequiredSchema = z.object({
   difficulties: z.optional(z.array(levelIndexSchema)),
   rate: z.optional(rateTypeSchema),
-  fc: z.optional(fcTypeSchema),
+  fc: z.optional(z.union([fcTypeSchema, fsTypeSchema])),
   fs: z.optional(fsTypeSchema),
   songs: z.optional(z.array(collectionRequiredSongSchema)),
   completed: z.optional(z.boolean()),
 });
+
+type LxnsCollectionRequired = z.infer<typeof lxnsCollectionRequiredSchema>;
+
+const collectionRequiredSchema = z.pipe(
+  lxnsCollectionRequiredSchema,
+  z.transform((required, context): CollectionRequired => {
+    if (
+      required.fc !== undefined &&
+      isFsType(required.fc) &&
+      required.fs !== undefined &&
+      required.fs !== required.fc
+    ) {
+      context.issues.push({
+        code: "custom",
+        input: required,
+        message: "LXNS collection requirement has conflicting fc/fs values",
+        path: ["fs"],
+      });
+      return z.NEVER;
+    }
+    return normalizeLxnsCollectionRequired(required);
+  }),
+) satisfies z.ZodMiniType<CollectionRequired>;
 
 export const collectionSchema = z.object({
   id: z.int(),
@@ -138,3 +163,21 @@ export const ratingTrendListSchema = z.array(ratingTrendSchema) satisfies z.ZodM
   RatingTrend[]
 >;
 export const scoreHistorySchema = z.nullable(scoreListSchema) satisfies z.ZodMiniType<ScoreHistory>;
+
+function normalizeLxnsCollectionRequired(required: LxnsCollectionRequired): CollectionRequired {
+  const { fc, fs, ...rest } = required;
+  if (fc !== undefined && isFsType(fc)) {
+    return { ...rest, fs: fs ?? fc };
+  }
+  return {
+    ...rest,
+    ...(fc !== undefined ? { fc } : {}),
+    ...(fs !== undefined ? { fs } : {}),
+  };
+}
+
+function isFsType(value: string): value is FSType {
+  return (
+    value === "fsdp" || value === "fsd" || value === "fsp" || value === "fs" || value === "sync"
+  );
+}

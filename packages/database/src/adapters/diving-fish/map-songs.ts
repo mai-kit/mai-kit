@@ -164,7 +164,7 @@ export function mapDivingFishMusicDataToSongList(
     }
     const songType = mapDivingFishSongType(entry.type);
     const diffs = mapDifficulties(entry, includeNotes);
-    const title = requiredTrimmedString(
+    const title = requiredSongTitle(
       entry.basic_info?.title ?? entry.title,
       `music_data[${id}].title`,
     );
@@ -219,6 +219,12 @@ function requiredTrimmedString(value: unknown, field: string): string {
   const text = value.trim();
   if (!text) throw invalidField(field, value);
   return text;
+}
+
+function requiredSongTitle(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.length === 0) throw invalidField(field, value);
+  // 水鱼存在以全角空格作为真实曲名的条目，标题必须保留上游原值。
+  return value;
 }
 
 function optionalTrimmedString(value: unknown, field: string): string | undefined {

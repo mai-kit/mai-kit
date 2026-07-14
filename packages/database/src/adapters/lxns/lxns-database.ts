@@ -23,6 +23,7 @@ import {
   collectionGenreSchema,
   collectionListSchema,
   collectionSchema,
+  normalizeLxnsCollection,
   parseLxnsResponse,
   songCollectionListSchema,
   songListSchema,
@@ -148,7 +149,7 @@ export class LxnsMaimaiDatabase implements MaimaiDatabase {
             message: `Lxns ${type}/list response is missing array field "${key}"`,
           });
         }
-        return collections;
+        return collections.map(normalizeLxnsCollection);
       },
     );
   }
@@ -162,7 +163,8 @@ export class LxnsMaimaiDatabase implements MaimaiDatabase {
       "collection",
       [type, id, query?.version],
       async () => this.http.get(`${type}/${id}`, query),
-      (value) => parseLxnsResponse(collectionSchema, value, `${type}/${id}`),
+      (value) =>
+        normalizeLxnsCollection(parseLxnsResponse(collectionSchema, value, `${type}/${id}`)),
     );
   }
 
