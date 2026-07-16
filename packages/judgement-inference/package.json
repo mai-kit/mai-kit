@@ -2,6 +2,13 @@
   "name": "@mai-kit/judgement-inference",
   "version": "0.0.0",
   "description": "根据达成率、DX 分与判定约束反推一组可行的完整判定分布。",
+  "keywords": [
+    "judgement-inference",
+    "maimai",
+    "maimai-dx",
+    "score-calculator",
+    "typescript"
+  ],
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",

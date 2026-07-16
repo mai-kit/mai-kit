@@ -2,6 +2,13 @@
   "name": "@mai-kit/judgement-solver",
   "version": "0.1.0",
   "description": "根据谱面物量、已有判定和成绩约束计算判定预算。",
+  "keywords": [
+    "judgement-solver",
+    "maimai",
+    "maimai-dx",
+    "score-calculator",
+    "typescript"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",

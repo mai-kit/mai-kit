@@ -2,6 +2,13 @@
   "name": "@mai-kit/assets",
   "version": "0.1.2",
   "description": "舞萌 DX 静态资源：界面徽章、默认字体与 resvg wasm。",
+  "keywords": [
+    "game-assets",
+    "maimai",
+    "maimai-dx",
+    "resvg",
+    "typescript"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",

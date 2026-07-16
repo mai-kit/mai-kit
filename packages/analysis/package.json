@@ -2,6 +2,13 @@
   "name": "@mai-kit/analysis",
   "version": "0.1.2",
   "description": "Best50 重算、升分候选与成绩快照对比。",
+  "keywords": [
+    "best-50",
+    "maimai",
+    "maimai-dx",
+    "score-analysis",
+    "typescript"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
