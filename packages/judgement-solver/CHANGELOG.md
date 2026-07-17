@@ -1,5 +1,14 @@
 # @mai-kit/judgement-solver
 
+## 0.1.1
+
+### Patch Changes
+
+- 24b251b: 补充各 npm 包的核心搜索关键词。
+- Updated dependencies [24b251b]
+  - @mai-kit/shared@0.1.2
+  - @mai-kit/utils@0.1.2
+
 ## 0.1.0
 
 ### Minor Changes

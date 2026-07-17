@@ -1,6 +1,6 @@
 {
   "name": "@mai-kit/judgement-solver",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "根据谱面物量、已有判定和成绩约束计算判定预算。",
   "keywords": [
     "judgement-solver",
