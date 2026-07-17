@@ -2,6 +2,11 @@
   "name": "@mai-kit/shared",
   "version": "0.1.1",
   "description": "mai-kit 各包共享的错误基类、领域类型与无业务 HTTP 工具。",
+  "keywords": [
+    "maimai",
+    "maimai-dx",
+    "typescript"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",

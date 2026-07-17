@@ -2,6 +2,13 @@
   "name": "@mai-kit/utils",
   "version": "0.1.1",
   "description": "Rating、达成率、判定、DX 分和谱面处理等纯函数。",
+  "keywords": [
+    "maimai",
+    "maimai-dx",
+    "rating-calculator",
+    "score-calculator",
+    "typescript"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",

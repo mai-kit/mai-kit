@@ -2,6 +2,13 @@
   "name": "@mai-kit/draw",
   "version": "0.1.2",
   "description": "舞萌 DX 成绩海报渲染。",
+  "keywords": [
+    "maimai",
+    "maimai-dx",
+    "poster-generator",
+    "satori",
+    "typescript"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
