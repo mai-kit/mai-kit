@@ -1,5 +1,18 @@
 # @mai-kit/prober
 
+## 0.3.0
+
+### Minor Changes
+
+- 82b2e2e: 按 LXNS 与 Diving-Fish 当前官方接口重整玩家能力：LXNS 开发者查询改为绑定玩家对象，个人端补齐排行、收藏品、导出与年度总结并移除不存在的 Recent；水鱼补充按曲目和按版本成绩查询，并修正宴会场映射及完整 records 的 B50 重算。
+
+### Patch Changes
+
+- 24b251b: 补充各 npm 包的核心搜索关键词。
+- 5f83e50: 使用 Zod Mini 校验 LXNS、Diving-Fish 与内置标签快照的外部 JSON，并在 database 缓存命中时复用端点 decoder；同时兼容水鱼的空白曲名与等级文案 `chart_stats.diff`，并将 LXNS 收藏要求中误放在 `fc` 的 FS 码归一到 `fs`。
+- Updated dependencies [24b251b]
+  - @mai-kit/shared@0.1.2
+
 ## 0.2.0
 
 ### Minor Changes

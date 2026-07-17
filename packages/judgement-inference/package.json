@@ -1,6 +1,6 @@
 {
   "name": "@mai-kit/judgement-inference",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "根据达成率、DX 分与判定约束反推一组可行的完整判定分布。",
   "keywords": [
     "judgement-inference",

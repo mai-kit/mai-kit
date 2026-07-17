@@ -1,5 +1,17 @@
 # @mai-kit/database
 
+## 0.3.0
+
+### Minor Changes
+
+- 5f83e50: 使用 Zod Mini 校验 LXNS、Diving-Fish 与内置标签快照的外部 JSON，并在 database 缓存命中时复用端点 decoder；同时兼容水鱼的空白曲名与等级文案 `chart_stats.diff`，并将 LXNS 收藏要求中误放在 `fc` 的 FS 码归一到 `fs`。
+
+### Patch Changes
+
+- 24b251b: 补充各 npm 包的核心搜索关键词。
+- Updated dependencies [24b251b]
+  - @mai-kit/shared@0.1.2
+
 ## 0.2.0
 
 ### Minor Changes

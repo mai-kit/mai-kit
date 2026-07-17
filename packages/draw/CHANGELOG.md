@@ -1,5 +1,19 @@
 # @mai-kit/draw
 
+## 0.1.3
+
+### Patch Changes
+
+- 24b251b: 补充各 npm 包的核心搜索关键词。
+- 375f0de: 升级 Satori 渲染依赖至 0.26.0，并验证 Node 与 Web 各版式输出。
+- Updated dependencies [24b251b]
+- Updated dependencies [5f83e50]
+- Updated dependencies [82b2e2e]
+  - @mai-kit/assets@0.1.3
+  - @mai-kit/prober@0.3.0
+  - @mai-kit/shared@0.1.2
+  - @mai-kit/utils@0.1.2
+
 ## 0.1.2
 
 ### Patch Changes
