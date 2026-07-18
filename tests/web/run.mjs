@@ -102,7 +102,12 @@ try {
   socket?.close();
   await stopProcess(chromeProcess);
   await closeServer(server);
-  await rm(profile, { recursive: true, force: true });
+  await rm(profile, {
+    recursive: true,
+    force: true,
+    maxRetries: 5,
+    retryDelay: 100,
+  });
 }
 
 function createCdpSender(devtoolsSocket) {
