@@ -50,7 +50,7 @@ mai-kit 按数据来源和处理阶段拆包。只安装实际需要的部分；
 把玩家数据与曲目、素材和谱面标签组合成 PNG 或 SVG：
 
 1. `new Draw({ database })` — `database` 提供素材 / 标签等能力
-2. 按产物调用扁平方法：`poster` / `best15` / `chart` / `upgrades` 等（末位共用 `RenderOptions`：`scale` / 页脚 / `fonts` / `assetFallback`）
+2. 按产物调用扁平方法：`poster` / `best15` / `chart` / `upgrades` 等（末位共用 `RenderOptions`：`scale` / 页眉 / 页脚 / `fonts` / `assetFallback`）
 
 返回值是 `Uint8Array` 或 SVG 字符串；保存文件、上传和下载由应用处理。
 

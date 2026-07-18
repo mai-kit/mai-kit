@@ -110,7 +110,10 @@ function pngDimensions(png: Uint8Array): { width: number; height: number } {
 }
 
 void test("poster returns a valid PNG at poster size", async () => {
-  const png = await draw.poster(fixedData, { assetFallback: "placeholder" });
+  const png = await draw.poster(fixedData, {
+    header: "example.header",
+    assetFallback: "placeholder",
+  });
   assert.ok(png.length > 1000, "PNG should be non-trivial in size");
   assert.ok(isPng(png), "should be a valid PNG (magic header)");
   const { width, height } = pngDimensions(png);
@@ -136,6 +139,7 @@ void test("poster honors scale", async () => {
 
 void test("posterSvg returns a non-trivial SVG with poster dimensions", async () => {
   const svg = await draw.posterSvg(fixedData, {
+    header: "example.header",
     footerLeft: "example.left",
     footerRight: "example.right",
     assetFallback: "placeholder",
@@ -146,8 +150,13 @@ void test("posterSvg returns a non-trivial SVG with poster dimensions", async ()
   assert.ok(svg.includes(`width="${POSTER_WIDTH}"`), "should declare poster width");
   assert.ok(svg.includes(`height="${POSTER_HEIGHT}"`), "should declare poster height");
   assert.ok(svg.includes("<path"), "should render vector content");
-  // satori 把文字描成 path，不能用 includes 查原文；用有无 footer 的差异断言
+  // satori 把文字描成 path，不能用 includes 查原文；用有无页眉、页脚的差异断言
   const withoutFooter = await draw.posterSvg(fixedData, { assetFallback: "placeholder" });
+  const withoutHeader = await draw.posterSvg(fixedData, {
+    footerLeft: "example.left",
+    footerRight: "example.right",
+    assetFallback: "placeholder",
+  });
   const onlyLeft = await draw.posterSvg(fixedData, {
     footerLeft: "example.left",
     assetFallback: "placeholder",
@@ -156,11 +165,23 @@ void test("posterSvg returns a non-trivial SVG with poster dimensions", async ()
     footerRight: "example.right",
     assetFallback: "placeholder",
   });
-  assert.notEqual(svg, withoutFooter, "should render footers when supplied");
+  assert.notEqual(svg, withoutHeader, "should render the custom header when supplied");
+  assert.notEqual(withoutHeader, withoutFooter, "should render footers when supplied");
   assert.notEqual(onlyLeft, withoutFooter, "should render footerLeft alone");
   assert.notEqual(onlyRight, withoutFooter, "should render footerRight alone");
   assert.notEqual(onlyLeft, onlyRight, "left-only and right-only footers should differ");
   assert.ok(!svg.includes("maimai.lxns.net"), "should not render a hard-coded footer");
+});
+
+void test("best boards render the optional custom header", async () => {
+  const withoutHeader = await draw.best15Svg(player, fixtureBests, {
+    assetFallback: "placeholder",
+  });
+  const withHeader = await draw.best15Svg(player, fixtureBests, {
+    header: "example.header",
+    assetFallback: "placeholder",
+  });
+  assert.notEqual(withHeader, withoutHeader);
 });
 
 void test("best50 returns 16:9 PNG", async () => {
@@ -177,7 +198,10 @@ void test("best50 returns 16:9 PNG", async () => {
 });
 
 void test("best15 returns 16:9 PNG", async () => {
-  const png = await draw.best15(player, fixtureBests, { assetFallback: "placeholder" });
+  const png = await draw.best15(player, fixtureBests, {
+    header: "example.header",
+    assetFallback: "placeholder",
+  });
   assert.deepEqual(pngDimensions(png), {
     width: BEST_WIDTH * 2,
     height: BEST_HEIGHT * 2,

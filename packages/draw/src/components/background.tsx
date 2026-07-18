@@ -95,13 +95,13 @@ export function Background() {
   );
 }
 
-export function HeaderLine() {
+export function HeaderLine({ text }: { text: string }) {
   return (
     <div style={styles.headerLine}>
       <div style={styles.moonMark}>
         <div style={styles.moonDot} />
       </div>
-      <div style={styles.brand}>maimai DX BUDDIES PLUS</div>
+      <div style={styles.brand}>{text}</div>
       <div style={styles.brandRule} />
     </div>
   );

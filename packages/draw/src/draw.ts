@@ -51,6 +51,7 @@ export interface DrawOptions {
  * |------|------|------|
  * | `scale` | `2` | 相对 1920×1080 的像素倍率（2 → 3840×2160） |
  * | `fonts` | assets 默认字体 | 自定义 satori 字体表 |
+ * | `header` | 不绘制 | 画布左上品牌页眉 |
  * | `footerLeft` | 不绘制 | 画布左下页脚 |
  * | `footerRight` | 不绘制 | 画布右下页脚；左右都不传则无页脚 |
  * | `assetFallback` | `"error"` | 见 {@link AssetFallback}：封面/头像失败时抛错或占位图 |
@@ -59,12 +60,14 @@ export interface DrawOptions {
  * ```ts
  * await draw.poster(profile, bests, {
  *   scale: 1,
+ *   header: "my-bot",
  *   footerLeft: "my-bot",
  *   footerRight: "mai-kit",
  *   assetFallback: "placeholder",
  * });
  * await draw.best15({ name: profile.name, rating: profile.rating }, bests, {
  *   scale: 1,
+ *   header: "my-bot",
  *   footerLeft: "my-bot",
  * });
  * ```
@@ -79,6 +82,11 @@ export interface RenderOptions {
    * 自定义 satori 字体表；不传则使用 `@mai-kit/assets` 默认字体（Noto Sans SC + Comfortaa）。
    */
   fonts?: SatoriOptions["fonts"];
+  /**
+   * 画布左上品牌页眉文案。
+   * 不传时不绘制品牌页眉；Best 板仍保留成绩页标题与玩家资料。
+   */
+  header?: string;
   /**
    * 页脚左侧文案（画布左下）。
    * 与 `footerRight` 都不传时不绘制页脚栏。
@@ -115,7 +123,10 @@ export interface RenderOptions {
  * @example
  * ```ts
  * const draw = new Draw({ database });
- * const png = await draw.poster(profile, bests, { footerLeft: "my-app" });
+ * const png = await draw.poster(profile, bests, {
+ *   header: "my-app",
+ *   footerLeft: "my-app",
+ * });
  * const head = { name: profile.name, rating: profile.rating };
  * const b15 = await draw.best15(head, bests);
  * ```
@@ -247,6 +258,7 @@ export class Draw {
     try {
       const element = createElement(ChartCardPoster, {
         chart: resolvedChart,
+        header: options.header,
         footerLeft: options.footerLeft,
         footerRight: options.footerRight,
       });
@@ -294,6 +306,7 @@ export class Draw {
     try {
       const element = createElement(UpgradesBoard, {
         data: resolved,
+        header: options.header,
         footerLeft: options.footerLeft,
         footerRight: options.footerRight,
       });
@@ -359,6 +372,7 @@ export class Draw {
     try {
       const element = createElement(B50Poster, {
         data: resolved,
+        header: options.header,
         footerLeft: options.footerLeft,
         footerRight: options.footerRight,
       });
@@ -402,6 +416,7 @@ export class Draw {
         player: resolvedPlayer,
         charts: resolvedCharts,
         page,
+        header: options.header,
         footerLeft: options.footerLeft,
         footerRight: options.footerRight,
       });

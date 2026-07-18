@@ -149,14 +149,17 @@ const styles = {
  */
 export function UpgradesBoard({
   data,
+  header,
   footerLeft,
   footerRight,
 }: {
   data: UpgradeBoardData;
+  header?: string;
   footerLeft?: string;
   footerRight?: string;
 }) {
   const items = data.candidates.slice(0, LIST_MAX);
+  const showHeader = Boolean(header);
   const showFooter = Boolean(footerLeft || footerRight);
   const first = items[0];
   const targetLabel =
@@ -169,7 +172,8 @@ export function UpgradesBoard({
 
   const columns = items.length <= 4 ? 1 : COLS;
   const rowCount = Math.max(1, Math.ceil(items.length / columns));
-  const listH = LIST_H + (showFooter ? 0 : FOOTER_H + GAP_FOOTER);
+  const listH =
+    LIST_H + (showHeader ? 0 : BRAND_H + GAP_BRAND) + (showFooter ? 0 : FOOTER_H + GAP_FOOTER);
   const cardH = (listH - ROW_GAP * (rowCount - 1)) / rowCount;
   const compact = columns === COLS;
   const cover = compact
@@ -206,9 +210,11 @@ export function UpgradesBoard({
     <div style={styles.root}>
       <Background />
       <div style={styles.content}>
-        <div style={styles.brand}>
-          <HeaderLine />
-        </div>
+        {header ? (
+          <div style={styles.brand}>
+            <HeaderLine text={header} />
+          </div>
+        ) : null}
         <div style={styles.header}>
           <div style={styles.titleBlock}>
             <div style={styles.kicker}>RATING BOOST</div>
