@@ -67,6 +67,7 @@ export default defineConfig({
       { text: "指南", link: "/guide/getting-started" },
       { text: "渲染预览", link: "/guide/draw-preview" },
       { text: "API", link: "/api/" },
+      { text: "更新日志", link: "/changelog/" },
       { text: "关于", link: "/guide/about" },
     ],
     sidebar: {
@@ -85,6 +86,23 @@ export default defineConfig({
         {
           text: "API 参考",
           items: [{ text: "概览", link: "/api/" }, ...apiSidebar],
+        },
+      ],
+      "/changelog/": [
+        {
+          text: "更新日志",
+          items: [
+            { text: "概览", link: "/changelog/" },
+            { text: "@mai-kit/shared", link: "/changelog/shared" },
+            { text: "@mai-kit/utils", link: "/changelog/utils" },
+            { text: "@mai-kit/judgement-solver", link: "/changelog/judgement-solver" },
+            { text: "@mai-kit/judgement-inference", link: "/changelog/judgement-inference" },
+            { text: "@mai-kit/database", link: "/changelog/database" },
+            { text: "@mai-kit/prober", link: "/changelog/prober" },
+            { text: "@mai-kit/analysis", link: "/changelog/analysis" },
+            { text: "@mai-kit/assets", link: "/changelog/assets" },
+            { text: "@mai-kit/draw", link: "/changelog/draw" },
+          ],
         },
       ],
     },
