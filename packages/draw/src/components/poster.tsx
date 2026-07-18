@@ -26,14 +26,18 @@ export { POSTER_HEIGHT, POSTER_WIDTH } from "./theme";
  *
  * 常规出图请使用 {@link Draw.poster}。
  *
- * @param props - 完整海报数据与可选页脚
+ * @param props - 完整海报数据与可选页眉、页脚
  * @returns satori 可渲染的 JSX 元素
  *
  * @example
  * ```ts
  * import { createElement } from "react";
  *
- * const element = createElement(B50Poster, { data, footerLeft: "my-app" });
+ * const element = createElement(B50Poster, {
+ *   data,
+ *   header: "my-app",
+ *   footerLeft: "my-app",
+ * });
  * ```
  *
  * @remarks 稳定性：高级布局 API。常规出图优先使用 {@link Draw.poster}。
@@ -41,11 +45,14 @@ export { POSTER_HEIGHT, POSTER_WIDTH } from "./theme";
  */
 export function B50Poster({
   data,
+  header,
   footerLeft,
   footerRight,
 }: {
   /** 完整海报数据 */
   data: PosterData;
+  /** 左上品牌页眉文案 */
+  header?: string;
   /** 左侧页脚文案 */
   footerLeft?: string;
   /** 右侧页脚文案 */
@@ -67,7 +74,7 @@ export function B50Poster({
     <div style={styles.root}>
       <Background />
       <div style={styles.leftPane}>
-        <HeaderLine />
+        {header ? <HeaderLine text={header} /> : null}
         <div style={styles.playerBlock}>
           <div style={styles.sectionLabel}>PLAYER</div>
           <div style={styles.nameRow}>

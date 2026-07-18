@@ -151,7 +151,7 @@ utils  ← draw
 ### `@mai-kit/draw`
 
 - `Draw`：扁平入口，**一种图一个方法**（`poster` / `best15` / `best35` / `best50` / `chart` / `upgrades` + 对应 `*Svg`）
-- 末位 `RenderOptions`：`scale`（默认 2）/ `fonts` / `footerLeft` / `footerRight` / `assetFallback`（默认 `"error"`）；单曲卡不画玩家栏
+- 末位 `RenderOptions`：`scale`（默认 2）/ `fonts` / `header` / `footerLeft` / `footerRight` / `assetFallback`（默认 `"error"`）；单曲卡不画玩家栏
 - 按图传最小数据：完整海报要 `profile`+`bests`+标签；Best 板要署名+`Bests`（库内只 slice 不排序，不足则少画）；加分候选由宿主用全曲+定数经 `rankBestsUpgradeCandidates`（**B15/B35 增量**，非单曲理论加分）
 - **不自带** `assets/`；默认字体与 wasm 经 `@mai-kit/assets`
 - PNG：Node `@resvg/resvg-js`，Web `@resvg/resvg-wasm` + assets 包内 wasm

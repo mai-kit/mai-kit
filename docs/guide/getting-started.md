@@ -83,7 +83,7 @@ writeFileSync("poster.png", poster);
 
 ```ts
 const player = { name: profile.name, rating: profile.rating };
-const opts = { scale: 1, footerLeft: "my-app" };
+const opts = { scale: 1, header: "my-app", footerLeft: "my-app" };
 
 await draw.best15(player, bests, opts);
 await draw.chart(scoreChart, opts);
@@ -106,6 +106,7 @@ const svg = await draw.posterSvg(profile, bests, opts);
 | --------------- | ------------ | ------------------------------------------------ |
 | `scale`         | `2`          | 相对 1920×1080 的倍率（`2` → 约 3840×2160）      |
 | `fonts`         | 包内默认字体 | 自定义 satori 字体表                             |
+| `header`        | 无           | 左上品牌页眉；不传则不画                         |
 | `footerLeft`    | 无           | 左下页脚；与 `footerRight` 都不传则不画页脚      |
 | `footerRight`   | 无           | 右下页脚                                         |
 | `assetFallback` | `"error"`    | 封面/头像失败抛错；设 `"placeholder"` 则用占位图 |

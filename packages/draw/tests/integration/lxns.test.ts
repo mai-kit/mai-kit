@@ -110,6 +110,7 @@ void test(
     };
     const footers = {
       scale: outputScale,
+      header: "mai-kit",
       footerLeft: "maimai.lxns.net",
       footerRight: "Designed by Amatsuka",
     };

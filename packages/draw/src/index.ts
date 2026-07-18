@@ -4,7 +4,7 @@
  * `@mai-kit/draw` — 舞萌 DX 成绩海报 / Best 板 / 单曲卡 / 升分板绘制。
  *
  * 入口扁平：`new Draw({ database })` 后 **一种图一个方法**（成对 PNG / SVG）。
- * 末位共用 {@link RenderOptions}（`scale` / `fonts` / 页脚 / `assetFallback`）。
+ * 末位共用 {@link RenderOptions}（`scale` / `fonts` / 页眉 / 页脚 / `assetFallback`）。
  * 单曲卡只展示谱面成绩，不画玩家栏。
  *
  * ## B50 海报
@@ -13,6 +13,7 @@
  * const draw = new Draw({ database });
  * const png = await draw.poster(profile, bests, {
  *   scale: 1,
+ *   header: "my-app",
  *   footerLeft: "my-app",
  * });
  * ```
@@ -21,7 +22,7 @@
  *
  * ```ts
  * const head = { name: profile.name, rating: profile.rating };
- * const opts = { scale: 1, footerLeft: "my-app" };
+ * const opts = { scale: 1, header: "my-app", footerLeft: "my-app" };
  * await draw.best15(head, bests, opts);
  * await draw.best35(head, bests, opts);
  * await draw.best50(head, bests, opts);

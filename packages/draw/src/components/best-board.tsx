@@ -187,7 +187,7 @@ function pageMeta(page: BestPage): {
  *
  * 常规出图请使用 {@link Draw.best15} / {@link Draw.best35} / {@link Draw.best50}。
  *
- * @param props - 玩家署名、该页成绩列表、页种与可选页脚
+ * @param props - 玩家署名、该页成绩列表、页种与可选页眉、页脚
  * @returns satori 可渲染的 JSX 元素
  *
  * @example
@@ -208,6 +208,7 @@ export function BestBoard({
   player,
   charts: inputCharts,
   page,
+  header,
   footerLeft,
   footerRight,
 }: {
@@ -217,6 +218,8 @@ export function BestBoard({
   charts: readonly ScoreChart[];
   /** 要渲染的 Best 板页种 */
   page: BestPage;
+  /** 左上品牌页眉文案 */
+  header?: string;
   /** 左侧页脚文案 */
   footerLeft?: string;
   /** 右侧页脚文案 */
@@ -230,7 +233,7 @@ export function BestBoard({
     <div style={styles.root}>
       <div style={styles.header}>
         <div style={styles.headerLeft}>
-          <span style={styles.b50}>B50</span>
+          {header ? <span style={styles.b50}>{header}</span> : null}
           <span style={{ ...styles.title, color: meta.accent }}>{meta.title}</span>
           <span style={{ ...styles.headerRule, backgroundColor: meta.accent }} />
         </div>

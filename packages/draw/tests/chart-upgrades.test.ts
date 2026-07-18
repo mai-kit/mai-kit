@@ -41,6 +41,7 @@ void test("chart renders a PNG with same board size as B50 family", async () => 
   const draw = new Draw({ database: source });
   const png = await draw.chart(chart, {
     scale: 1,
+    header: "example.header",
     assetFallback: "placeholder",
   });
   assert.ok(isPng(png));
@@ -76,7 +77,11 @@ void test("upgrades renders a PNG from host-provided candidates", async () => {
   };
 
   const draw = new Draw({ database: source });
-  const png = await draw.upgrades(board, { scale: 1, assetFallback: "placeholder" });
+  const png = await draw.upgrades(board, {
+    scale: 1,
+    header: "example.header",
+    assetFallback: "placeholder",
+  });
   assert.ok(isPng(png));
   writeFileSync(new URL("../output/upgrades-board.png", import.meta.url), png);
 });
@@ -139,4 +144,21 @@ void test("chartSvg includes achievement text path content size", async () => {
   });
   assert.ok(svg.includes("<svg"));
   assert.ok(svg.length > 5_000);
+});
+
+void test("chart and upgrades boards render the optional custom header", async () => {
+  const draw = new Draw({ database: source });
+  const chartWithoutHeader = await draw.chartSvg(chart, { assetFallback: "placeholder" });
+  const chartWithHeader = await draw.chartSvg(chart, {
+    header: "example.header",
+    assetFallback: "placeholder",
+  });
+  assert.notEqual(chartWithHeader, chartWithoutHeader);
+
+  const upgradesWithoutHeader = await draw.upgradesSvg({ candidates: [] });
+  const upgradesWithHeader = await draw.upgradesSvg(
+    { candidates: [] },
+    { header: "example.header" },
+  );
+  assert.notEqual(upgradesWithHeader, upgradesWithoutHeader);
 });

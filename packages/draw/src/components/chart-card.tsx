@@ -321,10 +321,12 @@ const styles = {
  */
 export function ChartCardPoster({
   chart,
+  header,
   footerLeft,
   footerRight,
 }: {
   chart: ScoreChart;
+  header?: string;
   footerLeft?: string;
   footerRight?: string;
 }) {
@@ -385,9 +387,11 @@ export function ChartCardPoster({
     <div style={styles.root}>
       <Background />
       <div style={styles.content}>
-        <div style={styles.header}>
-          <HeaderLine />
-        </div>
+        {header ? (
+          <div style={styles.header}>
+            <HeaderLine text={header} />
+          </div>
+        ) : null}
         <div style={styles.main}>
           <div style={styles.card}>
             <div style={styles.coverWrap}>
