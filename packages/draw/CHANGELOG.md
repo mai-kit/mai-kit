@@ -1,5 +1,11 @@
 # @mai-kit/draw
 
+## 0.2.0
+
+### Minor Changes
+
+- 8d04db8: 允许通过 `RenderOptions.header` 自定义各类图的左上品牌页眉，未传时不绘制品牌文字。
+
 ## 0.1.3
 
 ### Patch Changes
