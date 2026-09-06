@@ -44,6 +44,6 @@
     "@mai-kit/shared": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^24.5.1"
+    "@types/node": "^24.13.3"
   }
 }

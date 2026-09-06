@@ -46,6 +46,6 @@
     "glpk.js": "^5.0.0"
   },
   "devDependencies": {
-    "@types/node": "^24.5.1"
+    "@types/node": "^24.13.3"
   }
 }
