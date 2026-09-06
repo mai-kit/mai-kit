@@ -43,9 +43,9 @@
   },
   "dependencies": {
     "@mai-kit/shared": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
-    "@types/node": "^24.5.1"
+    "@types/node": "^24.13.3"
   }
 }
